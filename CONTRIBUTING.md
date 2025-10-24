@@ -19,13 +19,15 @@ Thank you for your interest in contributing to KasStamp! This guide will help yo
    cd kasstamp
    ```
 3. **Install dependencies**:
+
    ```bash
    cd js
    npm install
-   
+
    cd web
    npm install
    ```
+
 4. **Create a branch** for your changes:
    ```bash
    git checkout -b feature/your-feature-name
@@ -75,6 +77,7 @@ Thank you for your interest in contributing to KasStamp! This guide will help yo
 ### Pull Request Process
 
 1. **Push your changes** to your fork:
+
    ```bash
    git push origin feature/your-feature-name
    ```
@@ -88,7 +91,7 @@ Thank you for your interest in contributing to KasStamp! This guide will help yo
 ### PR Guidelines
 
 - **Keep PRs focused** - one feature/fix per PR
-- **Write clear commit messages** following conventional commits
+- **Write clear commit messages** following conventional commits (see [COMMIT_GUIDELINES.md](./COMMIT_GUIDELINES.md))
 - **Respond to feedback** promptly
 - **Update your PR** if requested changes are made
 
@@ -103,6 +106,7 @@ Thank you for your interest in contributing to KasStamp! This guide will help yo
 ### Creating a Good Issue
 
 Include:
+
 - **Clear description** of the problem
 - **Steps to reproduce** the issue
 - **Expected vs actual behavior**
@@ -115,6 +119,38 @@ Include:
 - Focus on constructive feedback
 - Help others learn and grow
 - Follow the project's coding standards
+
+## Commit Message Guidelines
+
+This project uses [Conventional Commits](https://www.conventionalcommits.org/) for consistent commit messages. See [COMMIT_GUIDELINES.md](./COMMIT_GUIDELINES.md) for detailed guidelines.
+
+### Quick Examples
+
+```bash
+# Good commit messages
+feat(web): add user authentication
+fix(js): resolve memory leak in wallet service
+docs(web): update API documentation
+test(js): add unit tests for crypto utilities
+ci: add commitlint to workflow
+refactor(web): simplify transaction building logic
+chore: update dependencies
+
+# Bad commit messages
+Add auth
+fix bug
+update docs
+feat: add feature (missing scope)
+fix(backend): resolve issue (invalid scope)
+```
+
+### Pre-commit Validation
+
+You can validate your commit messages locally:
+
+```bash
+npm run commitlint:check
+```
 
 ## Questions?
 

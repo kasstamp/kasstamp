@@ -1,0 +1,177 @@
+name: Commitlint
+
+on:
+  pull_request:
+    types:
+      # Default types + edited: https://docs.github.com/en/actions/using-workflows/events-that-trigger-workflows#pull_request
+      - opened
+      - synchronize
+      - reopened
+      - edited
+
+jobs:
+  commitlint:
+    runs-on: ubuntu-latest
+    name: Commitlint
+    permissions:
+      contents: read
+      pull-requests: read
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22.x'
+
+      - name: Cache dependencies
+        uses: actions/cache@v4
+        with:
+          path: node_modules
+          key: ${{ runner.os }}-node-modules-${{ hashFiles('package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-node-modules-
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint Commit Messages
+        run: |
+          set -euo pipefail
+
+          PR_NUMBER="${{ github.event.pull_request.number }}"
+          TOKEN="${{ secrets.GITHUB_TOKEN }}"
+
+          echo "Fetching commits from PR #$PR_NUMBER..."
+
+          # Create a simple script to fetch and lint commits
+          cat > lint-commits.js << 'EOF'
+          const https = require('https');
+          const { execSync } = require('child_process');
+
+          const PR_NUMBER = process.env.PR_NUMBER;
+          const TOKEN = process.env.TOKEN;
+          const REPO = process.env.REPO;
+
+          const options = {
+            hostname: 'api.github.com',
+            path: `/repos/${REPO}/pulls/${PR_NUMBER}/commits`,
+            headers: {
+              'Authorization': `token ${TOKEN}`,
+              'User-Agent': 'GitHub-Actions'
+            }
+          };
+
+          const req = https.request(options, (res) => {
+            let data = '';
+            res.on('data', (chunk) => data += chunk);
+            res.on('end', () => {
+              try {
+                const commits = JSON.parse(data);
+                
+                if (!Array.isArray(commits)) {
+                  console.error('API response is not an array:', typeof commits);
+                  process.exit(1);
+                }
+                
+                if (commits.length === 0) {
+                  console.log('No commits found in PR');
+                  process.exit(0);
+                }
+                
+                console.log(`Found ${commits.length} commits to lint\n`);
+                
+                const results = [];
+                let hasErrors = false;
+                
+                commits.forEach((commit, index) => {
+                  const message = commit.commit.message;
+                  const sha = commit.sha.substring(0, 7);
+                  
+                  console.log(`--- Commit ${index + 1} ---`);
+                  console.log(`SHA: ${sha}`);
+                  console.log(`Message: ${message}`);
+                  
+                  try {
+                    execSync(`echo "${message}" | npx commitlint`, { 
+                      stdio: 'pipe',
+                      encoding: 'utf8'
+                    });
+                    console.log('✅ Commit message is valid\n');
+                    results.push({ sha, message, valid: true, error: null });
+                  } catch (error) {
+                    const errorOutput = error.stdout || error.stderr || error.message;
+                    console.log('❌ Commit message validation failed!');
+                    console.log(errorOutput);
+                    console.log('');
+                    results.push({ sha, message, valid: false, error: errorOutput });
+                    hasErrors = true;
+                  }
+                });
+                
+                // Summary report
+                console.log('='.repeat(60));
+                console.log('📋 COMMITLINT SUMMARY REPORT');
+                console.log('='.repeat(60));
+                
+                const validCount = results.filter(r => r.valid).length;
+                const invalidCount = results.filter(r => !r.valid).length;
+                
+                console.log(`Total commits: ${results.length}`);
+                console.log(`✅ Valid: ${validCount}`);
+                console.log(`❌ Invalid: ${invalidCount}`);
+                console.log('');
+                
+                if (hasErrors) {
+                  console.log('❌ INVALID COMMIT MESSAGES:');
+                  console.log('-'.repeat(40));
+                  results.filter(r => !r.valid).forEach((result, index) => {
+                    console.log(`${index + 1}. SHA: ${result.sha}`);
+                    console.log(`   Message: ${result.message}`);
+                    console.log(`   Error: ${result.error}`);
+                    console.log('');
+                  });
+                  
+                  console.log('💡 HOW TO FIX:');
+                  console.log('- Use format: type(scope): description');
+                  console.log('- Valid types: chore, feat, fix, test, docs, ci, refactor');
+                  console.log('- Valid scopes: web, js');
+                  console.log('- Examples:');
+                  console.log('  ✅ feat(web): add user authentication');
+                  console.log('  ✅ fix(js): resolve memory leak');
+                  console.log('  ✅ chore(js): bump outdated dependencies');
+                  console.log('');
+                  
+                  process.exit(1);
+                } else {
+                  console.log('🎉 All commit messages are valid!');
+                }
+              } catch (error) {
+                console.error('Error:', error.message);
+                process.exit(1);
+              }
+            });
+          });
+
+          req.on('error', (error) => {
+            console.error('Request failed:', error.message);
+            process.exit(1);
+          });
+
+          req.end();
+          EOF
+
+          # Run the script with all required environment variables
+          PR_NUMBER="$PR_NUMBER" TOKEN="$TOKEN" REPO="${{ github.repository }}" node lint-commits.js
+
+      - name: Lint PR title
+        run: |
+          set -euo pipefail
+
+          echo "Linting PR title:"
+          echo "${{ github.event.pull_request.title }}"
+          echo ""
+          echo "${{ github.event.pull_request.title }}" | npx commitlint
+          echo "✅ PR title is valid"
