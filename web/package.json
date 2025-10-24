@@ -1,7 +1,7 @@
 {
   "name": "kasstamp-web",
   "private": true,
-  "version": "0.0.0",
+  "version": "0.0.1",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -72,5 +72,540 @@
     "typescript-eslint": "^8.39.1",
     "vite": "^7.1.2",
     "vitest": "^4.0.3"
+  }
+}
+{
+  "name": "kasstamp",
+  "version": "0.0.1",
+  "private": true,
+  "description": "KasStamp - Proof of Existence on Kaspa BlockDAG",
+  "author": "KasStamp Contributors",
+  "license": "ISC",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/kasstamp/kasstamp.git"
+  },
+  "homepage": "https://github.com/kasstamp/kasstamp",
+  "keywords": [
+    "kaspa",
+    "kas",
+    "blockchain",
+    "blockdag",
+    "proof-of-existence",
+    "pow"
+  ],
+  "packageManager": "npm@10.9.2",
+  "scripts": {
+    "commitlint": "commitlint --edit",
+    "commitlint:check": "commitlint --from HEAD~1 --to HEAD --verbose",
+    "format": "npx prettier --write \"**/*.{ts,js,json,md,yaml,yml}\" \"*.{ts,js,json,md,yaml,yml}\"",
+    "format:check": "npx prettier --check \"**/*.{ts,js,json,md,yaml,yml}\" \"*.{ts,js,json,md,yaml,yml}\""
+  },
+  "devDependencies": {
+    "@commitlint/cli": "^20.1.0",
+    "@commitlint/config-conventional": "^20.0.0",
+    "prettier": "^3.6.2",
+    "prettier-plugin-tailwindcss": "^0.7.0"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
+{
+  "name": "kasstamp",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "description": "KasStamp - Proof of Existence on Kaspa BlockDAG",
+  "author": "KasStamp Contributors",
+  "license": "ISC",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/kasstamp/kasstamp.git"
+  },
+  "homepage": "https://github.com/kasstamp/kasstamp",
+  "keywords": [
+    "kaspa",
+    "kas",
+    "blockchain",
+    "blockdag",
+    "proof-of-existence",
+    "pow"
+  ],
+  "packageManager": "npm@10.9.2",
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "build": "npm run clean && turbo run build",
+    "test": "jest --passWithNoTests",
+    "lint": "eslint . --ext .ts,.js",
+    "lint:fix": "eslint . --ext .ts,.js --fix",
+    "lint:packages": "npm run lint --workspaces --if-present",
+    "format": "npx prettier --write \"packages/**/*.{ts,js,json,md}\" \"*.{ts,js,json,md}\"",
+    "format:check": "npx prettier --check \"packages/**/*.{ts,js,json,md}\" \"*.{ts,js,json,md}\"",
+    "type-check": "tsc --build --noEmit tsconfig.build.json",
+    "type-check:packages": "npm run type-check --workspaces --if-present",
+    "validate": "npm run type-check && npm run lint && npm run test",
+    "validate:packages": "npm run validate --workspaces --if-present",
+    "clean": "rimraf packages/*/dist packages/*/tsconfig.tsbuildinfo",
+    "clean:all": "rimraf node_modules packages/*/node_modules packages/*/dist packages/*/tsconfig.tsbuildinfo",
+    "dev": "npm run build:tsc -- --watch",
+    "audit": "npm audit --audit-level=moderate",
+    "audit:fix": "npm audit fix",
+    "audit:all": "npm run audit --workspaces --if-present && npm audit",
+    "outdated": "npm outdated",
+    "outdated:all": "npm run outdated --workspaces --if-present && npm outdated"
+  },
+  "devDependencies": {
+    "@babel/core": "^7.25.0",
+    "@babel/preset-env": "^7.25.0",
+    "@babel/preset-typescript": "^7.25.0",
+    "@tsconfig/recommended": "^1.0.10",
+    "@types/jest": "^30.0.0",
+    "@types/node": "^24.9.1",
+    "@typescript-eslint/eslint-plugin": "^8.44.0",
+    "@typescript-eslint/parser": "^8.44.0",
+    "babel-jest": "^30.2.0",
+    "commander": "^14.0.1",
+    "esbuild": "^0.25.10",
+    "eslint": "^9.38.0",
+    "eslint-plugin-jest": "^29.0.1",
+    "jest": "^30.2.0",
+    "rimraf": "^6.0.1",
+    "ts-jest": "^29.4.2",
+    "tsup": "^8.0.0",
+    "tsx": "^4.20.5",
+    "turbo": "^2.5.8",
+    "typescript": "^5.9.2"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "@noble/curves": "^2.0.1",
+    "@noble/hashes": "^2.0.1",
+    "@scure/bip32": "^2.0.1",
+    "@scure/bip39": "^2.0.1",
+    "blakejs": "^1.2.1",
+    "jest-environment-jsdom": "^30.2.0",
+    "openapi-fetch": "^0.15.0",
+    "uuid": "^13.0.0"
+  }
+}
+{
+  "name": "@kasstamp/kaspa_api",
+  "version": "0.0.1",
+  "description": "Utilities for Kasstamp",
+  "type": "module",
+  "main": "dist/index.js",
+  "module": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "src",
+    "README.md"
+  ],
+  "sideEffects": false,
+  "license": "ISC",
+  "scripts": {
+    "generate": "openapi-typescript https://api.kaspa.org/openapi.json -o src/generated/kaspa-api.ts && npx prettier --write src/generated/**/*.ts",
+    "generate:testnet": "openapi-typescript https://api-testnet-10.kaspa.org/openapi.json -o src/generated/kaspa-api-testnet.ts && npx prettier --write src/generated/**/*.ts",
+    "build": "npm run build:bundle",
+    "build:bundle": "tsup --dts src/index.ts --format esm --splitting false --clean --no-splitting --sourcemap"
+  },
+  "dependencies": {
+    "openapi-fetch": "^0.15.0"
+  },
+  "devDependencies": {
+    "@types/jest": "^30.0.0",
+    "@typescript-eslint/eslint-plugin": "^8.44.0",
+    "@typescript-eslint/parser": "^8.44.0",
+    "eslint": "^9.35.0",
+    "eslint-plugin-jest": "^29.0.1",
+    "jest": "^30.2.0",
+    "jest-environment-jsdom": "^30.2.0",
+    "jest-junit": "^16.0.0",
+    "openapi-typescript": "^7.4.3",
+    "ts-jest": "^29.1.0",
+    "tsup": "^8.0.0",
+    "tsx": "^4.20.5",
+    "typescript": "^5.9.2"
+  }
+}
+{
+  "name": "@kasstamp/tx",
+  "version": "0.0.1",
+  "description": "Transaction building and processing for Kasstamp",
+  "type": "module",
+  "main": "dist/index.js",
+  "module": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "src",
+    "README.md"
+  ],
+  "sideEffects": false,
+  "license": "ISC",
+  "scripts": {
+    "build": "tsup src/index.ts --format esm --splitting false --clean --no-splitting --sourcemap && tsc -p tsconfig.json --emitDeclarationOnly || echo \"⚠️  Types generation failed but JS is OK\"",
+    "build:bundle": "tsup src/index.ts  --dts --format esm --splitting false --clean --no-splitting --sourcemap"
+  },
+  "dependencies": {
+    "@kasstamp/utils": "*",
+    "@kasstamp/rpc": "*",
+    "@kasstamp/kaspa_wasm_sdk": "*"
+  },
+  "devDependencies": {
+    "tsup": "^8.0.0"
+  }
+}
+{
+  "name": "@kasstamp/chunking",
+  "version": "0.0.1",
+  "description": "File chunking utilities for Kasstamp",
+  "type": "module",
+  "main": "dist/index.js",
+  "module": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "src",
+    "README.md"
+  ],
+  "sideEffects": false,
+  "license": "ISC",
+  "scripts": {
+    "build": "npm run build:bundle",
+    "build:bundle": "tsup src/index.ts  --dts --format esm --splitting false --clean --no-splitting --sourcemap"
+  },
+  "dependencies": {
+    "@kasstamp/crypto": "*",
+    "uuid": "^13.0.0"
+  },
+  "devDependencies": {
+    "@types/jest": "^30.0.0",
+    "@types/uuid": "^10.0.0",
+    "@typescript-eslint/eslint-plugin": "^8.44.0",
+    "@typescript-eslint/parser": "^8.44.0",
+    "eslint": "^9.35.0",
+    "eslint-plugin-jest": "^29.0.1",
+    "jest": "^30.2.0",
+    "jest-environment-jsdom": "^30.2.0",
+    "jest-junit": "^16.0.0",
+    "ts-jest": "^29.1.0",
+    "tsup": "^8.0.0",
+    "tsx": "^4.20.5",
+    "typescript": "^5.9.2"
+  }
+}
+{
+  "name": "@kasstamp/sdk",
+  "version": "0.0.1",
+  "description": "Professional Kaspa SDK - Zero-config enterprise blockchain integration",
+  "type": "module",
+  "main": "dist/index.js",
+  "module": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "src",
+    "README.md"
+  ],
+  "sideEffects": false,
+  "license": "ISC",
+  "scripts": {
+    "build": "npm run build:bundle && npm run build:types",
+    "build:bundle": "tsup src/index.ts --format esm --splitting false --clean --no-splitting --sourcemap",
+    "build:types": "tsc -p tsconfig.json --emitDeclarationOnly"
+  },
+  "dependencies": {
+    "@kasstamp/utils": "*",
+    "@kasstamp/rpc": "*",
+    "@kasstamp/wallet": "*",
+    "@kasstamp/kaspa_wasm_sdk": "*",
+    "@kasstamp/tx": "*",
+    "@kasstamp/crypto": "*",
+    "@kasstamp/stamping": "*",
+    "@kasstamp/chunking": "*",
+    "@kasstamp/kaspa_api": "*"
+  },
+  "devDependencies": {
+    "tsup": "^8.0.0",
+    "typescript": "^5.9.2",
+    "@typescript-eslint/eslint-plugin": "^8.44.0",
+    "@typescript-eslint/parser": "^8.44.0",
+    "eslint": "^9.35.0"
+  }
+}
+{
+  "name": "@kasstamp/utils",
+  "version": "0.0.1",
+  "description": "Core utilities and logging for Kasstamp",
+  "type": "module",
+  "main": "dist/index.js",
+  "module": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "src",
+    "README.md"
+  ],
+  "sideEffects": false,
+  "license": "ISC",
+  "scripts": {
+    "build": "npm run build:bundle",
+    "build:bundle": "tsup --dts src/index.ts --format esm --splitting false --clean --no-splitting --sourcemap"
+  },
+  "devDependencies": {
+    "@types/jest": "^30.0.0",
+    "@typescript-eslint/eslint-plugin": "^8.44.0",
+    "@typescript-eslint/parser": "^8.44.0",
+    "eslint": "^9.35.0",
+    "eslint-plugin-jest": "^29.0.1",
+    "jest": "^30.2.0",
+    "jest-environment-jsdom": "^30.2.0",
+    "jest-junit": "^16.0.0",
+    "ts-jest": "^29.1.0",
+    "tsup": "^8.0.0",
+    "tsx": "^4.20.5",
+    "typescript": "^5.9.2"
+  }
+}
+{
+  "name": "@kasstamp/crypto",
+  "version": "0.0.1",
+  "description": "Cryptographic utilities for Kasstamp",
+  "type": "module",
+  "main": "dist/index.js",
+  "module": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "src",
+    "README.md"
+  ],
+  "sideEffects": false,
+  "license": "ISC",
+  "scripts": {
+    "build": "npm run build:bundle",
+    "build:bundle": "tsup src/index.ts  --dts --format esm --splitting false --clean --no-splitting --sourcemap"
+  },
+  "dependencies": {
+    "@kasstamp/utils": "*",
+    "@kasstamp/kaspa_wasm_sdk": "*"
+  },
+  "devDependencies": {
+    "tsup": "^8.0.0"
+  }
+}
+{
+  "name": "@kasstamp/rpc",
+  "version": "0.0.1",
+  "description": "RPC client utilities for Kasstamp",
+  "type": "module",
+  "main": "dist/index.js",
+  "module": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "src",
+    "README.md"
+  ],
+  "sideEffects": false,
+  "license": "ISC",
+  "scripts": {
+    "build": "npm run build:bundle",
+    "build:bundle": "tsup --dts src/index.ts --format esm --splitting false --clean --no-splitting --sourcemap"
+  },
+  "dependencies": {
+    "@kasstamp/kaspa_wasm_sdk": "*",
+    "@kasstamp/utils": "*"
+  },
+  "devDependencies": {
+    "@types/jest": "^30.0.0",
+    "@typescript-eslint/eslint-plugin": "^8.44.0",
+    "@typescript-eslint/parser": "^8.44.0",
+    "eslint": "^9.35.0",
+    "eslint-plugin-jest": "^29.0.1",
+    "jest": "^30.2.0",
+    "jest-environment-jsdom": "^30.2.0",
+    "jest-junit": "^16.0.0",
+    "ts-jest": "^29.1.0",
+    "tsup": "^8.0.0",
+    "tsx": "^4.20.5",
+    "typescript": "^5.9.2"
+  }
+}
+{
+  "name": "@kasstamp/wallet",
+  "version": "0.0.1",
+  "description": "Wallet functionality for Kasstamp",
+  "type": "module",
+  "main": "dist/index.js",
+  "module": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "src",
+    "README.md"
+  ],
+  "sideEffects": false,
+  "license": "ISC",
+  "scripts": {
+    "build": "npm run build:bundle && npm run build:types",
+    "build:bundle": "tsup src/index.ts --format esm --splitting false --clean --no-splitting --sourcemap",
+    "build:types": "tsc -p tsconfig.json --emitDeclarationOnly"
+  },
+  "dependencies": {
+    "@kasstamp/crypto": "*",
+    "@kasstamp/kaspa_wasm_sdk": "*",
+    "@noble/curves": "^2.0.0",
+    "@noble/hashes": "^2.0.0",
+    "@scure/bip32": "^2.0.1",
+    "@scure/bip39": "^2.0.1",
+    "bech32": "^2.0.0",
+    "blakejs": "^1.2.1",
+    "scrypt-js": "^3.0.1",
+    "zod": "^4.1.8"
+  },
+  "devDependencies": {
+    "@types/node": "^24.9.1",
+    "tsup": "^8.0.0"
+  }
+}
+{
+  "name": "@kasstamp/stamping",
+  "version": "0.0.1",
+  "description": "File stamping functionality for Kasstamp",
+  "type": "module",
+  "main": "dist/index.js",
+  "module": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "src",
+    "README.md"
+  ],
+  "sideEffects": false,
+  "license": "ISC",
+  "scripts": {
+    "build": "npm run build:bundle && npm run build:types",
+    "build:bundle": "tsup src/index.ts --format esm --splitting false --clean --no-splitting --sourcemap",
+    "build:types": "tsc -p tsconfig.json --emitDeclarationOnly"
+  },
+  "dependencies": {
+    "@kasstamp/chunking": "*",
+    "@kasstamp/crypto": "*",
+    "@kasstamp/kaspa_api": "*",
+    "@kasstamp/kaspa_wasm_sdk": "*",
+    "@kasstamp/tx": "*",
+    "@kasstamp/utils": "*",
+    "@kasstamp/wallet": "*"
+  },
+  "devDependencies": {
+    "@types/jest": "^30.0.0",
+    "@typescript-eslint/eslint-plugin": "^8.44.0",
+    "@typescript-eslint/parser": "^8.44.0",
+    "eslint": "^9.35.0",
+    "eslint-plugin-jest": "^29.0.1",
+    "jest": "^30.2.0",
+    "jest-environment-jsdom": "^30.2.0",
+    "jest-junit": "^16.0.0",
+    "ts-jest": "^29.1.0",
+    "tsup": "^8.0.0",
+    "tsx": "^4.20.5",
+    "typescript": "^5.9.2"
+  }
+}
+{
+  "name": "@kasstamp/kaspa_wasm_sdk",
+  "version": "0.0.1",
+  "description": "Pure Kaspa WASM bindings from rusty-kaspa - Low-level WASM access only",
+  "type": "module",
+  "main": "dist/index.js",
+  "module": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "src",
+    "nodejs",
+    "web",
+    "README.md"
+  ],
+  "sideEffects": false,
+  "license": "ISC",
+  "scripts": {
+    "build": "npm run build:bundle && npm run build:types",
+    "build:bundle": "tsup src/index.ts --format esm --splitting false --clean --no-splitting --sourcemap",
+    "build:types": "tsc -p tsconfig.json --emitDeclarationOnly"
+  },
+  "devDependencies": {
+    "tsup": "^8.0.0",
+    "typescript": "^5.9.2",
+    "@typescript-eslint/eslint-plugin": "^8.44.0",
+    "@typescript-eslint/parser": "^8.44.0",
+    "eslint": "^9.35.0"
   }
 }
