@@ -1,0 +1,215 @@
+name: CD - JS
+
+on:
+  workflow_dispatch:
+
+env:
+  VERSION_MAJOR: '0'
+  VERSION_MINOR: '0'
+  NODE_VERSION: '22.x'
+  REGISTRY: 'registry.gitlab.com'
+  IMAGE_NAME: 'registry.gitlab.com/kasdag/kasstamp_web'
+
+jobs:
+  version:
+    name: Calculate Version
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.calc.outputs.version }}
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Calculate and create version tag
+        id: calc
+        run: |
+          LATEST_TAG=$(git tag -l "v${{ env.VERSION_MAJOR }}.${{ env.VERSION_MINOR }}.*" | sort -V | tail -n 1)
+          if [ -z "$LATEST_TAG" ]; then
+            PATCH=1
+          else
+            PATCH=$(echo "$LATEST_TAG" | sed 's/v${{ env.VERSION_MAJOR }}\.${{ env.VERSION_MINOR }}\.//')
+            PATCH=$((PATCH + 1))
+          fi
+          VERSION="${{ env.VERSION_MAJOR }}.${{ env.VERSION_MINOR }}.${PATCH}"
+          TAG="v${VERSION}"
+
+          echo "📦 Latest tag: ${LATEST_TAG:-none}"
+          echo "📦 New version: ${VERSION}"
+          echo "::notice title=Release Version::Building v${VERSION}"
+
+          # 🧾 Bump package.json versions BEFORE tagging
+          echo "Updating package.json files to version ${VERSION}"
+          find . -name "package.json" -not -path "*/node_modules/*" -exec \
+            jq --arg v "$VERSION" '.version=$v' {} > tmp.json \; -exec mv tmp.json {} \;
+
+          git config user.name "GitHub Actions"
+          git config user.email "actions@github.com"
+          git add **/package.json
+          git commit -m "chore: bump to version ${VERSION}" || echo "No changes to commit"
+
+          # 🏷️ Create tag AFTER bump commit
+          git tag -a "${TAG}" -m "Release ${TAG}"
+          git push origin
+          git push origin "${TAG}"
+
+          echo "version=${VERSION}" >> $GITHUB_OUTPUT
+  
+  build:
+    name: Build and Release v${{ needs.version.outputs.version }}
+    runs-on: ubuntu-latest
+    needs: version
+    permissions:
+      contents: write
+      packages: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: |
+            js/package-lock.json
+            web/package-lock.json
+
+      - name: Install JS packages dependencies
+        working-directory: js
+        run: npm ci
+
+      - name: Build JS packages
+        working-directory: js
+        run: |
+          echo "🔨 Building JS packages..."
+          npm run build
+
+      - name: Install web dependencies
+        working-directory: web
+        run: npm ci
+
+      - name: Build web application
+        working-directory: web
+        env:
+          NODE_ENV: production
+        run: |
+          echo "🔨 Building web application for production..."
+          npm run build
+          echo "✅ Web build complete"
+          ls -lh dist/
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to GitLab Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ secrets.GITLAB_REGISTRY_USER }}
+          password: ${{ secrets.GITLAB_REGISTRY_TOKEN }}
+
+      - name: Build and push Docker image
+        working-directory: web
+        run: |
+          VERSION="${{ needs.version.outputs.version }}"
+          
+          echo "🐳 Building production Docker image..."
+          echo "   Version: ${VERSION}"
+          echo "   Image: ${{ env.IMAGE_NAME }}"
+          
+          docker buildx build \
+            --platform linux/amd64 \
+            -t ${{ env.IMAGE_NAME }}:${VERSION} \
+            -t ${{ env.IMAGE_NAME }}:latest \
+            --push \
+            .
+          
+          echo "📤 Image built and pushed to GitLab Registry!"
+          
+          echo "✅ Docker image pushed successfully!"
+          echo "   ${{ env.IMAGE_NAME }}:${VERSION}"
+          echo "   ${{ env.IMAGE_NAME }}:latest"
+
+      - name: Generate changelog
+        id: changelog
+        run: |
+          PREV_TAG=$(git describe --abbrev=0 --tags $(git rev-list --tags --skip=1 --max-count=1) 2>/dev/null || echo "")
+          
+          if [ -z "$PREV_TAG" ]; then
+            echo "changelog=Initial release" >> $GITHUB_OUTPUT
+            echo "prev_tag=" >> $GITHUB_OUTPUT
+          else
+            CHANGELOG=$(git log ${PREV_TAG}..HEAD --pretty=format:"- %s (%h)" --no-merges)
+            CHANGELOG="${CHANGELOG//'%'/'%25'}"
+            CHANGELOG="${CHANGELOG//$'\n'/'%0A'}"
+            CHANGELOG="${CHANGELOG//$'\r'/'%0D'}"
+            echo "changelog=${CHANGELOG}" >> $GITHUB_OUTPUT
+            echo "prev_tag=${PREV_TAG}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Create GitHub Release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          VERSION="${{ needs.version.outputs.version }}"
+          TAG="v${VERSION}"
+          CHANGELOG="${{ steps.changelog.outputs.changelog }}"
+          PREV_TAG="${{ steps.changelog.outputs.prev_tag }}"
+          IMAGE_NAME="${{ env.IMAGE_NAME }}"
+          REPO="${{ github.repository }}"
+          
+          if [ -z "$PREV_TAG" ]; then
+            COMPARE_URL="**Full Changelog**: https://github.com/${REPO}/commits/${TAG}"
+          else
+            COMPARE_URL="**Full Changelog**: https://github.com/${REPO}/compare/${PREV_TAG}...${TAG}"
+          fi
+          
+          cat > release_body.md << EOF
+          ## 🚀 KasStamp Web v${VERSION}
+          
+          ### 📝 Changes
+          ${CHANGELOG}
+          
+          ---
+          
+          ${COMPARE_URL}
+          EOF
+          
+          if gh release view "${TAG}" >/dev/null 2>&1; then
+            echo "⚠️ Release ${TAG} already exists, skipping creation"
+          else
+            echo "✅ Creating new release ${TAG}"
+            gh release create "${TAG}" \
+              --title "KasStamp v${VERSION}" \
+              --notes-file release_body.md
+          fi
+
+      - name: Release Summary
+        run: |
+          VERSION="${{ needs.version.outputs.version }}"
+          
+          echo "## 🎉 Release v${VERSION} Complete!" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 📦 Version" >> $GITHUB_STEP_SUMMARY
+          echo "**${VERSION}**" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 🐳 Docker Images" >> $GITHUB_STEP_SUMMARY
+          echo "- \`${{ env.IMAGE_NAME }}:${VERSION}\` (release)" >> $GITHUB_STEP_SUMMARY
+          echo "- \`${{ env.IMAGE_NAME }}:latest\` (updated)" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 🚀 Deploy to Production" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`bash" >> $GITHUB_STEP_SUMMARY
+          echo "docker pull ${{ env.IMAGE_NAME }}:${VERSION}" >> $GITHUB_STEP_SUMMARY
+          echo "docker stop kasstamp-web && docker rm kasstamp-web" >> $GITHUB_STEP_SUMMARY
+          echo "docker run -d --name kasstamp-web --network web --restart unless-stopped ${{ env.IMAGE_NAME }}:${VERSION}" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 📝 GitHub Release" >> $GITHUB_STEP_SUMMARY
+          echo "https://github.com/${{ github.repository }}/releases/tag/v${VERSION}" >> $GITHUB_STEP_SUMMARY

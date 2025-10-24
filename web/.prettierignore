@@ -1,0 +1,10 @@
+node_modules
+dist
+coverage
+build
+.turbo
+.next
+**/*.d.ts
+**/dist
+**/node_modules
+

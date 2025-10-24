@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+
+    <!-- Favicons -->
+    <link rel="icon" type="image/x-icon" href="/favicon/favicon.ico" />
+    <link rel="icon" type="image/png" sizes="16x16" href="/favicon/favicon-16x16.png" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon/favicon-32x32.png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/favicon/apple-touch-icon.png" />
+    <link rel="manifest" href="/favicon/site.webmanifest" />
+
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"
+    />
+    <title>KasStamp - Stamp your file on the Layer-1 Kaspa BlockDAG.</title>
+    <script>
+      (function () {
+        try {
+          var stored = localStorage.getItem('theme');
+          var prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+          var dark = stored ? stored === 'dark' : prefersDark;
+          var root = document.documentElement;
+          if (dark) {
+            root.style.setProperty('--bg-primary', '#0f172a');
+            root.style.setProperty('--bg-secondary', '#1e293b');
+            root.style.setProperty('--bg-tertiary', '#334155');
+            root.style.setProperty('--text-primary', '#f8fafc');
+            root.style.setProperty('--text-secondary', '#cbd5e1');
+            root.style.setProperty('--text-muted', '#94a3b8');
+            root.style.setProperty('--border-primary', '#334155');
+            root.style.setProperty('--border-secondary', '#475569');
+            root.style.setProperty('--tooltip-bg', '#f1f5f9');
+            root.style.setProperty('--tooltip-text', '#0f172a');
+          } else {
+            root.style.setProperty('--bg-primary', '#ffffff');
+            root.style.setProperty('--bg-secondary', '#f8fafc');
+            root.style.setProperty('--bg-tertiary', '#f1f5f9');
+            root.style.setProperty('--text-primary', '#0f172a');
+            root.style.setProperty('--text-secondary', '#475569');
+            root.style.setProperty('--text-muted', '#64748b');
+            root.style.setProperty('--border-primary', '#e2e8f0');
+            root.style.setProperty('--border-secondary', '#cbd5e1');
+            root.style.setProperty('--tooltip-bg', '#0f172a');
+            root.style.setProperty('--tooltip-text', '#ffffff');
+          }
+        } catch (e) {}
+      })();
+    </script>
+  </head>
+  <body class="min-h-screen">
+    <div id="root" class="min-h-screen"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

@@ -1,0 +1,15 @@
+{
+  "extends": "../../tsconfig.json",
+  "compilerOptions": {
+    "baseUrl": "../..",
+    "paths": {
+      "@kasstamp/*": ["packages/*/src"]
+    },
+    "outDir": "dist",
+    "rootDir": "src",
+    // Skip type checking for WASM SDK to avoid $1 type conflicts
+    "skipLibCheck": true
+  },
+  "include": ["src/**/*"],
+  "exclude": ["node_modules", "dist"]
+}

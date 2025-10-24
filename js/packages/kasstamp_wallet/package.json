@@ -1,0 +1,43 @@
+{
+  "name": "@kasstamp/wallet",
+  "version": "0.0.0",
+  "description": "Wallet functionality for Kasstamp",
+  "type": "module",
+  "main": "dist/index.js",
+  "module": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "src",
+    "README.md"
+  ],
+  "sideEffects": false,
+  "license": "ISC",
+  "scripts": {
+    "build": "npm run build:bundle && npm run build:types",
+    "build:bundle": "tsup src/index.ts --format esm --splitting false --clean --no-splitting --sourcemap",
+    "build:types": "tsc -p tsconfig.json --emitDeclarationOnly"
+  },
+  "dependencies": {
+    "@kasstamp/crypto": "*",
+    "@kasstamp/kaspa_wasm_sdk": "*",
+    "@noble/curves": "^2.0.0",
+    "@noble/hashes": "^2.0.0",
+    "@scure/bip32": "^2.0.1",
+    "@scure/bip39": "^2.0.1",
+    "bech32": "^2.0.0",
+    "blakejs": "^1.2.1",
+    "scrypt-js": "^3.0.1",
+    "zod": "^4.1.8"
+  },
+  "devDependencies": {
+    "@types/node": "^24.9.1",
+    "tsup": "^8.0.0"
+  }
+}

@@ -1,0 +1,913 @@
+@import 'tailwindcss';
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;0,9..40,800;1,9..40,400;1,9..40,500;1,9..40,600;1,9..40,700;1,9..40,800&display=swap');
+@source '../index.html';
+@source './**/*.{ts,tsx}';
+
+/*
+  ======================================================
+  THEME VARIABLES
+  ======================================================
+*/
+html,
+body,
+#root {
+  height: 100%;
+}
+
+/* Light mode */
+:root {
+  /* #f1f3f7 */
+  --background: #eaecf2;
+  --background-contrast: #ffffff;
+  --background-outline: #e7f0f4;
+  --background-shadow: #797979;
+  --text: #676e80;
+  --text-strong: #33394b;
+  --primary: #00b676;
+  /* Default surface for interactive elements */
+  --surface-control: var(--background-contrast);
+  /* Global transition durations */
+  --duration-fast: 0.15s;
+  --duration-slow: 0.3s;
+  /* Dialog background opacity (light) */
+  --dialog-contrast-opacity: 95%;
+  /* Legacy variable names for compatibility */
+  --border-primary: var(--background-outline);
+  --text-secondary: var(--text);
+}
+
+/* Dark mode */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #0e1118;
+    --background-contrast: #171b27;
+    --background-outline: #212a3e;
+    --background-shadow: #0f0f16;
+    --text: #7f8699;
+    --text-strong: #f5f5f5;
+    --primary: #00b676;
+    /* Default surface for interactive elements */
+    --surface-control: var(--background-contrast);
+    /* Dialog background opacity (dark) */
+    --dialog-contrast-opacity: 70%;
+    /* Legacy variable names for compatibility */
+    --border-primary: var(--background-outline);
+    --text-secondary: var(--text);
+  }
+}
+
+/*
+  ======================================================
+  BASE STYLES
+  ======================================================
+*/
+@layer base {
+  :root {
+    color-scheme: light dark;
+  }
+
+  body {
+    @apply font-sans tracking-normal antialiased;
+    background-color: var(--background);
+    color: var(--text);
+  }
+
+  *::selection {
+    background: color-mix(in srgb, var(--primary) 20%, transparent);
+    color: var(--text-strong);
+  }
+
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    font-family: 'DM Sans', sans-serif;
+    letter-spacing: -0.01em;
+    color: var(--text-strong);
+  }
+
+  h1 {
+    @apply text-4xl leading-tight font-semibold md:text-5xl;
+  }
+  h2 {
+    @apply text-3xl leading-snug font-semibold md:text-4xl;
+  }
+  h3 {
+    @apply text-2xl leading-snug font-semibold md:text-3xl;
+  }
+  h4 {
+    @apply text-xl leading-snug font-semibold md:text-2xl;
+  }
+  h5 {
+    @apply text-lg leading-snug font-semibold;
+  }
+  h6 {
+    @apply text-base leading-snug font-semibold;
+  }
+
+  p {
+    @apply text-base leading-5;
+    color: var(--text);
+  }
+  strong {
+    @apply font-semibold;
+    color: var(--text-strong);
+  }
+}
+
+/*
+  ======================================================
+  UTILITY CLASSES
+  ======================================================
+*/
+.full-bleed {
+  position: relative;
+  left: 50%;
+  right: 50%;
+  margin-left: -50vw;
+  margin-right: -50vw;
+  width: 100vw;
+  max-width: 100vw;
+  overflow-x: hidden;
+}
+
+.glass {
+  backdrop-filter: saturate(180%) blur(8px);
+  background: rgba(255, 255, 255, 0.7);
+}
+
+/*
+  ======================================================
+  ANIMATIONS
+  ======================================================
+*/
+@keyframes marquee-left {
+  0% {
+    transform: translate3d(0, 0, 0);
+  }
+  100% {
+    transform: translate3d(-50%, 0, 0);
+  }
+}
+
+@keyframes marquee-right {
+  0% {
+    transform: translate3d(-50%, 0, 0);
+  }
+  100% {
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+@keyframes dialog-in-custom {
+  from {
+    opacity: 0;
+    transform: translate3d(-50%, -50%, 0) scale(0.9);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(-50%, -50%, 0) scale(1);
+  }
+}
+
+@keyframes dialog-out-custom {
+  from {
+    opacity: 1;
+    transform: translate3d(-50%, -50%, 0) scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: translate3d(-50%, -50%, 0) scale(0.9);
+  }
+}
+
+@keyframes dialog-top-in-custom {
+  from {
+    opacity: 0;
+    transform: translate3d(-50%, 0, 0) scale(0.9);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(-50%, 0, 0) scale(1);
+  }
+}
+
+@keyframes dialog-top-out-custom {
+  from {
+    opacity: 1;
+    transform: translate3d(-50%, 0, 0) scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: translate3d(-50%, 0, 0) scale(0.9);
+  }
+}
+
+@keyframes overlay-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes overlay-out {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes tooltip-in {
+  from {
+    opacity: 0;
+    transform: translateY(2px) scale(0.7);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/*
+  ======================================================
+  FORM ELEMENTS
+  ======================================================
+*/
+@layer components {
+  /* Basic form elements */
+  input:not([type='checkbox']):not([type='radio']),
+  select,
+  textarea {
+    @apply w-full rounded-md border px-2 py-2 text-sm transition outline-none sm:px-3 sm:text-base;
+    background-color: var(--surface-control);
+    color: var(--text-strong);
+    border-color: var(--background-outline);
+    font-family:
+      ui-sans-serif,
+      system-ui,
+      -apple-system,
+      BlinkMacSystemFont,
+      'Segoe UI',
+      sans-serif;
+    -webkit-appearance: none; /* Remove iOS default styling */
+    appearance: none;
+    box-sizing: border-box;
+    touch-action: manipulation; /* Prevent iOS double-tap zoom */
+    -webkit-user-select: text; /* Ensure text is selectable on iOS */
+    user-select: text;
+  }
+
+  input[type='password'],
+  .password-field {
+    letter-spacing: 0.1em;
+  }
+
+  /* Custom styled checkboxes */
+  input[type='checkbox'] {
+    -webkit-appearance: none !important;
+    appearance: none !important;
+    background-color: white;
+    border: 2px solid #d1d5db;
+    border-radius: 0.25rem !important;
+    display: inline-block;
+    position: relative;
+    flex-shrink: 0 !important;
+    width: 1.25rem !important;
+    height: 1.25rem !important;
+    min-width: 1.25rem !important;
+    min-height: 1.25rem !important;
+    max-width: 1.25rem !important;
+    max-height: 1.25rem !important;
+    box-sizing: border-box !important;
+    vertical-align: middle;
+  }
+
+  input[type='checkbox']:checked {
+    background-color: #10b981;
+    border-color: #10b981;
+  }
+
+  input[type='checkbox']:checked::before {
+    content: '';
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: 40%;
+    height: 70%;
+    border: solid white;
+    border-width: 0 2px 2px 0;
+    transform: translate(-50%, -60%) rotate(45deg);
+  }
+
+  input[type='checkbox']:focus {
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.2);
+  }
+
+  textarea {
+    color: var(--text-strong);
+  }
+
+  input:not([type='checkbox']):not([type='radio'])::placeholder,
+  textarea::placeholder {
+    @apply text-sm font-semibold;
+    font-family:
+      ui-sans-serif,
+      system-ui,
+      -apple-system,
+      BlinkMacSystemFont,
+      'Segoe UI',
+      sans-serif;
+    color: var(--text);
+    letter-spacing: normal; /* Override password field letter-spacing */
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  input:not([type='checkbox']):not([type='radio']):focus,
+  select:focus,
+  textarea:focus {
+    border-color: color-mix(in srgb, var(--primary) 55%, var(--background-outline));
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 20%, transparent);
+    background-color: var(--surface-control);
+  }
+
+  textarea:hover {
+    background-color: var(--surface-control);
+  }
+
+  select {
+    @apply pr-8;
+  }
+  textarea {
+    @apply min-h-24;
+  }
+
+  /* Floating label inputs */
+  .input-wrapper.has-floating {
+    position: relative;
+    isolation: isolate;
+  }
+  .input-wrapper.has-floating .input-field::placeholder {
+    color: transparent;
+  }
+  .input-wrapper.has-floating .input-label {
+    @apply absolute top-1/2 left-3 -translate-y-1/2 text-sm font-semibold;
+    font-family:
+      ui-sans-serif,
+      system-ui,
+      -apple-system,
+      BlinkMacSystemFont,
+      'Segoe UI',
+      sans-serif;
+    color: var(--text);
+    letter-spacing: normal;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    pointer-events: none !important;
+    transform-origin: left center;
+    transition:
+      transform var(--duration-fast) ease,
+      color var(--duration-fast) ease,
+      top var(--duration-fast) ease;
+    -webkit-user-select: none;
+    user-select: none;
+  }
+  .input-wrapper.has-floating .input-field:focus + .input-label,
+  .input-wrapper.has-floating .input-field:not(:placeholder-shown) + .input-label {
+    top: 0.75rem; /* 12px */
+    transform: translateY(0) scale(0.85);
+    color: var(--text-strong);
+  }
+  .input-wrapper.has-floating .input-field {
+    @apply pt-4;
+  }
+
+  /* Content interface transparent inputs */
+  .content-interface textarea {
+    @apply w-full resize-none overflow-y-auto rounded-xl p-2 text-sm;
+    background-color: transparent;
+    border-color: transparent;
+    outline: none;
+    min-height: 2.5rem;
+    max-height: 600px;
+    color: var(--text-strong);
+  }
+
+  .content-interface textarea:hover,
+  .content-interface textarea:focus,
+  .content-interface textarea:focus-visible {
+    background-color: transparent !important;
+    border-color: transparent !important;
+    outline: none !important;
+    box-shadow: none !important;
+  }
+  .content-interface textarea::placeholder {
+    color: var(--text);
+  }
+
+  /* Password toggle button */
+  .password-toggle-btn {
+    @apply absolute top-1/2 right-2 inline-flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded transition-colors;
+    background-color: transparent;
+    border: none;
+    outline: none;
+    color: var(--text);
+  }
+  .password-toggle-btn:hover {
+    color: var(--text-strong);
+    background-color: transparent;
+  }
+}
+
+/*
+  ======================================================
+  BUTTONS
+  ======================================================
+*/
+@layer components {
+  button,
+  .button {
+    @apply inline-flex cursor-pointer items-center justify-center gap-2 rounded-md px-3 py-2 font-medium transition select-none focus-visible:ring-2 focus-visible:ring-offset-0 focus-visible:outline-none disabled:pointer-events-none disabled:opacity-50 sm:px-4;
+    background-color: var(--surface-control);
+    color: var(--text-strong);
+    border: 1px solid var(--background-outline);
+  }
+
+  /* Neutral button states */
+  button:hover,
+  .button:hover {
+    background-color: color-mix(in srgb, var(--text) 6%, var(--surface-control));
+    border-color: color-mix(in srgb, var(--primary) 30%, var(--background-outline));
+  }
+  button:active,
+  .button:active {
+    background-color: color-mix(in srgb, var(--text) 12%, var(--surface-control));
+    border-color: color-mix(in srgb, var(--primary) 40%, var(--background-outline));
+  }
+  button:focus-visible,
+  .button:focus-visible {
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 22%, transparent);
+  }
+
+  /* Primary button */
+  .button.primary,
+  button.primary {
+    background-color: var(--primary);
+    color: white;
+    border-color: transparent;
+    transition:
+      background-color 150ms ease-in-out,
+      box-shadow 150ms ease-in-out,
+      transform 100ms ease-in-out;
+  }
+
+  button.primary {
+    background-color: var(--primary) !important;
+    color: white !important;
+    border-color: transparent !important;
+  }
+
+  /* Primary button states */
+  button.primary:hover,
+  .button.primary:hover {
+    background-color: color-mix(in srgb, var(--primary) 85%, var(--background));
+  }
+  button.primary:active,
+  .button.primary:active {
+    background-color: color-mix(in srgb, var(--primary) 86%, var(--background));
+    transform: translateZ(0) scale(0.99);
+  }
+  button.primary:focus-visible,
+  .button.primary:focus-visible {
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 35%, transparent);
+  }
+
+  /* Primary button disabled */
+  button.primary:disabled,
+  .button.primary:disabled,
+  button.primary[disabled],
+  .button.primary[disabled] {
+    background-color: color-mix(in srgb, var(--primary) 60%, var(--background));
+    color: color-mix(in srgb, white 70%, var(--text));
+    cursor: not-allowed;
+    opacity: 0.7;
+    box-shadow: none;
+    transform: none;
+  }
+}
+
+/*
+  ======================================================
+  CONTAINERS
+  ======================================================
+*/
+@layer components {
+  .box {
+    @apply rounded-2xl border p-3 md:p-6;
+    background-color: var(--background-contrast);
+    border-color: var(--background-outline);
+    color: var(--text);
+    --surface-control: var(--background);
+  }
+
+  .box.interactive,
+  .box-interactive {
+    @apply rounded-3xl border p-3 transition md:p-4;
+    background-color: var(--background-contrast);
+    border-color: var(--background-outline);
+    color: var(--text);
+    box-shadow:
+      0 0 40px color-mix(in srgb, var(--background-shadow) 3%, transparent),
+      0 0 30px color-mix(in srgb, var(--background-outline) 30%, transparent),
+      0 1px 0px color-mix(in srgb, var(--background-outline) 20%, transparent);
+    --surface-control: var(--background);
+  }
+
+  .box.interactive:hover,
+  .box-interactive:hover {
+    border-color: color-mix(in srgb, var(--primary) 35%, transparent);
+  }
+
+  .box.interactive:focus-within,
+  .box-interactive:focus-within {
+    border-color: color-mix(in srgb, var(--primary) 50%, transparent);
+  }
+
+  .card {
+    @apply rounded-2xl border p-3 md:p-5;
+    background-color: var(--background-contrast);
+    border-color: var(--background-outline);
+    color: var(--text);
+    --surface-control: var(--background);
+  }
+
+  /* Drag & Drop State for content interface */
+  .content-interface.dragdrop {
+    border-color: color-mix(in srgb, var(--primary) 40%, var(--background-outline));
+    background-color: color-mix(in srgb, var(--primary) 10%, var(--background-contrast));
+    box-shadow: 0 8px 20px color-mix(in srgb, var(--primary) 15%, transparent);
+  }
+}
+
+/*
+  ======================================================
+  DIALOGS
+  ======================================================
+*/
+@layer components {
+  .dialog {
+    @apply fixed top-1/2 left-1/2 z-[110] w-[95vw] max-w-lg rounded-2xl border p-4 shadow-2xl transition-[height] duration-200 ease-in-out sm:w-[90vw] sm:p-8;
+    background-color: color-mix(
+      in srgb,
+      var(--background-contrast) var(--dialog-contrast-opacity),
+      transparent
+    );
+    border-color: var(--background-outline);
+    color: var(--text);
+    backdrop-filter: blur(12px);
+    --surface-control: var(--background);
+    will-change: transform, opacity, height;
+    transform: translate3d(-50%, -50%, 0);
+    contain: layout style;
+    pointer-events: auto;
+  }
+
+  .dialog-top {
+    @apply z-[110] w-[95vw] max-w-lg rounded-2xl border p-4 shadow-2xl transition-[height] duration-200 ease-in-out sm:w-[90vw] sm:p-8;
+    background-color: color-mix(
+      in srgb,
+      var(--background-contrast) var(--dialog-contrast-opacity),
+      transparent
+    );
+    border-color: var(--background-outline);
+    color: var(--text);
+    backdrop-filter: blur(12px);
+    --surface-control: var(--background);
+    will-change: transform, opacity, height;
+    contain: layout style;
+  }
+
+  /* Desktop: Fixed positioning */
+  @media (min-width: 640px) {
+    .dialog-top {
+      position: fixed;
+      left: 50%;
+      top: 10%;
+      transform: translate3d(-50%, 0, 0);
+    }
+  }
+
+  /* Mobile: Absolute positioning to allow page scroll */
+  @media (max-width: 639px) {
+    .dialog-top {
+      position: absolute;
+      left: 50%;
+      top: 50px;
+      transform: translateX(-50%);
+      margin-bottom: 50px;
+      pointer-events: auto;
+      z-index: 110 !important;
+    }
+
+    /* Ensure body can scroll when dialog is open on mobile */
+    body {
+      overflow: visible !important;
+      height: auto !important;
+      position: static !important;
+    }
+
+    html {
+      overflow: visible !important;
+      height: auto !important;
+    }
+  }
+
+  .dialog-overlay {
+    @apply z-[100] backdrop-blur-sm;
+    background-color: color-mix(in srgb, var(--background-shadow) 70%, transparent);
+    will-change: opacity;
+  }
+
+  /* Desktop: Fixed overlay */
+  @media (min-width: 640px) {
+    .dialog-overlay {
+      position: fixed;
+      inset: 0;
+    }
+  }
+
+  /* Hide scrollbars on iOS Safari */
+  .scrollbar-hide {
+    -ms-overflow-style: none; /* IE and Edge */
+    scrollbar-width: none; /* Firefox */
+  }
+
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none; /* Chrome, Safari and Opera */
+  }
+
+  /* Mobile: Absolute overlay to allow page scroll */
+  @media (max-width: 639px) {
+    .dialog-overlay {
+      position: absolute !important;
+      top: 0 !important;
+      left: 0 !important;
+      right: 0 !important;
+      width: 100vw !important;
+      min-height: 200vh !important;
+      z-index: 100 !important;
+      backdrop-filter: blur(8px) !important;
+      -webkit-backdrop-filter: blur(8px) !important;
+      background-color: rgba(0, 0, 0, 0.5) !important;
+    }
+  }
+  .dialog-overlay[data-state='open'] {
+    animation: overlay-in var(--duration-fast) ease-out;
+  }
+  .dialog-overlay[data-state='closed'] {
+    animation: overlay-out var(--duration-fast) ease-in forwards;
+  }
+
+  /* Standard dialog animations (centered) */
+  .dialog.dialog-content[data-state='open'] {
+    animation: dialog-in-custom 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+    animation-fill-mode: both;
+    will-change: transform, opacity;
+  }
+  .dialog.dialog-content[data-state='closed'] {
+    animation: dialog-out-custom 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    animation-fill-mode: both;
+    will-change: transform, opacity;
+  }
+
+  /* Top-aligned dialog animations */
+  .dialog-top.dialog-content[data-state='open'] {
+    animation: dialog-top-in-custom 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+    animation-fill-mode: both;
+    will-change: transform, opacity;
+  }
+  .dialog-top.dialog-content[data-state='closed'] {
+    animation: dialog-top-out-custom 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    animation-fill-mode: both;
+    will-change: transform, opacity;
+  }
+
+  .dialog-close {
+    @apply rounded-md p-1 transition-colors;
+    background-color: transparent;
+    border: none;
+    outline: none;
+    color: var(--text-strong);
+  }
+  .dialog-close:hover,
+  .dialog-close:focus,
+  .dialog-close:active {
+    background-color: var(--surface-control);
+    border-color: var(--background-outline);
+    color: var(--text-strong);
+  }
+}
+
+/*
+  ======================================================
+  TABS
+  ======================================================
+*/
+@layer components {
+  .tabs {
+    @apply w-full;
+  }
+  .tab-list {
+    @apply inline-flex items-center gap-1 rounded-3xl border p-1;
+    background-color: var(--surface-control);
+    border-color: var(--background-outline);
+    position: relative;
+    --tab-indicator-left: 0px;
+    --tab-indicator-width: 0px;
+  }
+  .tab-list .tab-indicator {
+    @apply absolute shadow-lg;
+    left: 0; /* use transform for GPU-accelerated movement */
+    top: 4px;
+    height: calc(100% - 8px);
+    width: var(--tab-indicator-width);
+    border-radius: 9999px;
+    background-color: var(--background-contrast);
+    transform: translate3d(var(--tab-indicator-left), 0, 0);
+    will-change: transform, width;
+    transition:
+      transform var(--duration-fast) cubic-bezier(0.16, 1, 0.3, 1),
+      width var(--duration-fast) cubic-bezier(0.16, 1, 0.3, 1);
+    pointer-events: none;
+  }
+  .tab {
+    @apply relative inline-flex items-center gap-2 rounded-3xl px-3 py-1 text-sm font-medium transition;
+    color: var(--text);
+    background-color: transparent;
+    border-color: transparent;
+  }
+  .tab:hover {
+    color: var(--text-strong);
+    background-color: transparent;
+    border-color: transparent;
+  }
+  .tab[aria-selected='true'],
+  .tab.active {
+    color: var(--text-strong);
+  }
+}
+
+/*
+  ======================================================
+  TOGGLES & SWITCHES
+  ======================================================
+*/
+@layer components {
+  .toggle {
+    @apply inline-flex h-6 w-10 items-center rounded-full transition;
+    background-color: color-mix(in srgb, var(--text) 25%, var(--background-contrast));
+  }
+  .toggle-indicator {
+    @apply inline-block h-5 w-5 translate-x-0 rounded-full transition;
+    background-color: var(--background-contrast);
+    box-shadow: 0 1px 2px color-mix(in srgb, var(--background-shadow) 25%, transparent);
+  }
+  .toggle--on {
+    background-color: color-mix(in srgb, var(--primary) 55%, var(--background-contrast));
+  }
+  .toggle--on .toggle-indicator {
+    background-color: var(--primary);
+  }
+}
+
+/*
+  ======================================================
+  PROGRESS BARS
+  ======================================================
+*/
+@layer components {
+  progress {
+    @apply h-2 w-full overflow-hidden rounded-full;
+    background-color: var(--background-outline);
+  }
+  progress::-webkit-progress-bar {
+    background-color: var(--background-outline);
+  }
+  progress::-webkit-progress-value {
+    background-color: var(--primary);
+  }
+  progress::-moz-progress-bar {
+    background-color: var(--primary);
+  }
+}
+
+/*
+  ======================================================
+  BADGES
+  ======================================================
+*/
+@layer components {
+  .badge {
+    @apply inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium select-none;
+    background-color: color-mix(in srgb, var(--text) 15%, var(--background-contrast));
+    color: var(--text-strong);
+    border: 1px solid var(--background-outline);
+  }
+  .badge-primary {
+    background-color: color-mix(in srgb, var(--primary) 18%, var(--background-contrast));
+    color: var(--text-strong);
+    border-color: color-mix(in srgb, var(--primary) 45%, var(--background-outline));
+  }
+}
+
+/*
+  ======================================================
+  TOOLTIPS
+  ======================================================
+*/
+@layer components {
+  .tooltip {
+    @apply relative inline-block;
+  }
+  .tooltip-content {
+    @apply pointer-events-none absolute z-50 -translate-x-1/2 rounded-md px-2 py-1 text-xs whitespace-nowrap shadow;
+    background-color: var(--text-strong);
+    color: var(--background-contrast);
+    border: 1px solid var(--background-outline);
+    animation: tooltip-in var(--duration-fast) ease-out;
+  }
+  .tooltip-top .tooltip-content {
+    @apply bottom-full left-1/2 mb-2;
+  }
+  .tooltip-right .tooltip-content {
+    @apply top-1/2 left-full ml-2 translate-x-0 -translate-y-1/2;
+  }
+  .tooltip-bottom .tooltip-content {
+    @apply top-full left-1/2 mt-2;
+  }
+  .tooltip-left .tooltip-content {
+    @apply top-1/2 right-full mr-2 translate-x-0 -translate-y-1/2;
+  }
+}
+
+/*
+  ======================================================
+  MARQUEE ANIMATIONS
+  ======================================================
+*/
+@layer components {
+  .marquee-track {
+    animation-duration: var(--marquee-speed, 40s);
+    animation-timing-function: linear;
+    animation-iteration-count: infinite;
+    will-change: transform;
+    backface-visibility: hidden;
+    transform: translateZ(0);
+  }
+
+  .marquee-left {
+    animation-name: marquee-left;
+  }
+  .marquee-right {
+    animation-name: marquee-right;
+  }
+
+  .group:hover .marquee-track,
+  .group:focus-within .marquee-track {
+    animation-play-state: paused;
+  }
+}
+
+/*
+  ======================================================
+  WALLET COMPONENTS
+  ======================================================
+*/
+@layer components {
+  .wallet-list-item {
+    @apply flex cursor-pointer items-center justify-between p-3 transition;
+    background-color: var(--background-contrast);
+    color: var(--text-strong);
+  }
+  .wallet-list-item:hover {
+    background-color: var(--surface-control);
+  }
+  .wallet-list-item .wallet-title {
+    @apply font-medium;
+    color: var(--text-strong);
+  }
+  .wallet-list-item .wallet-subtitle {
+    @apply text-xs break-all;
+    color: var(--text);
+  }
+  .wallet-list-item .wallet-delete-btn {
+    @apply text-[color:var(--text)] hover:bg-[var(--surface-control)];
+  }
+}
