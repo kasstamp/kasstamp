@@ -45,7 +45,7 @@
     "outdated:all": "npm run outdated --workspaces --if-present && npm outdated"
   },
   "devDependencies": {
-    "@babel/core": "^7.25.0",
+    "@babel/core": "^7.28.5",
     "@babel/preset-env": "^7.25.0",
     "@babel/preset-typescript": "^7.25.0",
     "@tsconfig/recommended": "^1.0.10",
