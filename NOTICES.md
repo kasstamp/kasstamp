@@ -40,6 +40,3 @@ SOFTWARE.
 ## Main Project License
 
 The main KasStamp project is licensed under the ISC License. See [LICENSE](./LICENSE) for details.
-
-
-

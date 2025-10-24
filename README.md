@@ -1,4 +1,4 @@
-# Kasstamp , Whitepaper (Vision & Product Overview)
+# KasStamp , Whitepaper (Vision & Product Overview)
 
 **Version:** 1.0  
 **Date:** 16 October 2025
@@ -148,4 +148,3 @@ KasStamp is about turning questions of digital existence and integrity into answ
 simple receipt with clear disclosure choices, it supports a wide spectrum of human activity,from art and community life
 to research, family memory, and commercial practice,without asking people to learn new technical languages. The promise
 is modest and powerful: **evidence that travels with your digital materials, expressed clearly enough to be believed.**
-

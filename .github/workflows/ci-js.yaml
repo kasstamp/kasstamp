@@ -2,12 +2,12 @@ name: CI - JS
 
 on:
   push:
-    branches: [ main, develop ]
-    paths: 
+    branches: [main, develop]
+    paths:
       - 'js/**'
       - 'web/**'
   pull_request:
-    branches: [ main, develop ]
+    branches: [main, develop]
     paths:
       - 'js/**'
       - 'web/**'
@@ -34,6 +34,9 @@ jobs:
           cache-dependency-path: js/package-lock.json
 
       - name: Install dependencies
+        run: npm ci
+
+      - name: Install dependencies
         working-directory: js
         run: npm ci
 
@@ -46,7 +49,6 @@ jobs:
             ${{ runner.os }}-turbo-
 
       - name: Check code formatting
-        working-directory: js
         run: |
           echo "🎨 Checking code formatting with Prettier..."
           npm run format:check
@@ -106,15 +108,15 @@ jobs:
         run: |
           echo "Verifying package exports..."
           EXIT_CODE=0
-          
+
           for package_dir in packages/*/; do
             package_name=$(basename "$package_dir")
             echo "Checking $package_name exports..."
-            
+
             MISSING=""
             [ -f "${package_dir}dist/index.js" ] || MISSING="${MISSING} index.js"
             [ -f "${package_dir}dist/index.d.ts" ] || MISSING="${MISSING} index.d.ts"
-            
+
             if [ -n "$MISSING" ]; then
               echo "❌ $package_name: Missing$MISSING"
               EXIT_CODE=1
@@ -122,13 +124,13 @@ jobs:
               echo "✅ $package_name: All exports present"
             fi
           done
-          
+
           if [ $EXIT_CODE -ne 0 ]; then
             echo ""
             echo "❌ Some packages are missing required exports"
             exit 1
           fi
-          
+
           echo ""
           echo "✅ All packages have required exports!"
 
@@ -175,7 +177,7 @@ jobs:
           echo "Node.js version: $(node --version)"
           echo "Platform: $(node -e "console.log(process.platform)")"
           echo "WebCrypto available: $(node -e "console.log(!!globalThis.crypto?.subtle)")"
-          
+
           # Run tests with coverage
           npm test -- --coverage --coverageReporters=text-lcov --coverageReporters=text
 
@@ -215,12 +217,6 @@ jobs:
       - name: Install web dependencies
         working-directory: web
         run: npm ci
-
-      - name: Check code formatting
-        working-directory: web
-        run: |
-          echo "🎨 Checking code formatting with Prettier..."
-          npm run format:check
 
       - name: Run ESLint
         working-directory: web

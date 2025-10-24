@@ -57,7 +57,7 @@ jobs:
           git push origin "${TAG}"
 
           echo "version=${VERSION}" >> $GITHUB_OUTPUT
-  
+
   build:
     name: Build and Release v${{ needs.version.outputs.version }}
     runs-on: ubuntu-latest
@@ -118,20 +118,20 @@ jobs:
         working-directory: web
         run: |
           VERSION="${{ needs.version.outputs.version }}"
-          
+
           echo "🐳 Building production Docker image..."
           echo "   Version: ${VERSION}"
           echo "   Image: ${{ env.IMAGE_NAME }}"
-          
+
           docker buildx build \
             --platform linux/amd64 \
             -t ${{ env.IMAGE_NAME }}:${VERSION} \
             -t ${{ env.IMAGE_NAME }}:latest \
             --push \
             .
-          
+
           echo "📤 Image built and pushed to GitLab Registry!"
-          
+
           echo "✅ Docker image pushed successfully!"
           echo "   ${{ env.IMAGE_NAME }}:${VERSION}"
           echo "   ${{ env.IMAGE_NAME }}:latest"
@@ -140,7 +140,7 @@ jobs:
         id: changelog
         run: |
           PREV_TAG=$(git describe --abbrev=0 --tags $(git rev-list --tags --skip=1 --max-count=1) 2>/dev/null || echo "")
-          
+
           if [ -z "$PREV_TAG" ]; then
             echo "changelog=Initial release" >> $GITHUB_OUTPUT
             echo "prev_tag=" >> $GITHUB_OUTPUT
@@ -164,24 +164,24 @@ jobs:
           PREV_TAG="${{ steps.changelog.outputs.prev_tag }}"
           IMAGE_NAME="${{ env.IMAGE_NAME }}"
           REPO="${{ github.repository }}"
-          
+
           if [ -z "$PREV_TAG" ]; then
             COMPARE_URL="**Full Changelog**: https://github.com/${REPO}/commits/${TAG}"
           else
             COMPARE_URL="**Full Changelog**: https://github.com/${REPO}/compare/${PREV_TAG}...${TAG}"
           fi
-          
+
           cat > release_body.md << EOF
           ## 🚀 KasStamp Web v${VERSION}
-          
+
           ### 📝 Changes
           ${CHANGELOG}
-          
+
           ---
-          
+
           ${COMPARE_URL}
           EOF
-          
+
           if gh release view "${TAG}" >/dev/null 2>&1; then
             echo "⚠️ Release ${TAG} already exists, skipping creation"
           else
@@ -194,7 +194,7 @@ jobs:
       - name: Release Summary
         run: |
           VERSION="${{ needs.version.outputs.version }}"
-          
+
           echo "## 🎉 Release v${VERSION} Complete!" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### 📦 Version" >> $GITHUB_STEP_SUMMARY

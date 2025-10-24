@@ -1,0 +1,56 @@
+# Dependencies
+node_modules
+**/node_modules
+
+# Build outputs
+dist
+**/dist
+build
+**/build
+.turbo
+**/.turbo
+
+# Coverage
+coverage
+**/coverage
+lcov-report
+**/lcov-report
+*.lcov
+
+# Lock files
+package-lock.json
+pnpm-lock.yaml
+yarn.lock
+
+# Generated files
+*.min.js
+*.bundle.js
+*.d.ts
+*.d.ts.map
+*.js.map
+tsconfig.tsbuildinfo
+**/*.tsbuildinfo
+
+# WASM bindings
+js/**/kaspa_wasm_sdk/web/**/*.js
+js/**/kaspa_wasm_sdk/nodejs/**/*.js
+js/packages/kasstamp_kaspa_wasm_sdk/web
+js/packages/kasstamp_kaspa_wasm_sdk/nodejs
+
+# Environment files
+.env
+.env.*
+
+# IDE
+.vscode
+.idea
+
+# OS
+.DS_Store
+Thumbs.db
+
+# CI
+.github/*
+!.github/workflows/
+!.github/workflows/**
+
