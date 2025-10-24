@@ -1,0 +1,82 @@
+{
+  "name": "kasstamp",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "KasStamp - Proof of Existence on Kaspa BlockDAG",
+  "author": "KasStamp Contributors",
+  "license": "ISC",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/kasstamp/kasstamp.git"
+  },
+  "homepage": "https://github.com/kasstamp/kasstamp",
+  "keywords": [
+    "kaspa",
+    "kas",
+    "blockchain",
+    "blockdag",
+    "proof-of-existence",
+    "pow"
+  ],
+  "packageManager": "npm@10.9.2",
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "build": "npm run clean && turbo run build",
+    "test": "jest --passWithNoTests",
+    "lint": "eslint . --ext .ts,.js",
+    "lint:fix": "eslint . --ext .ts,.js --fix",
+    "lint:packages": "npm run lint --workspaces --if-present",
+    "format": "npx prettier --write \"packages/**/*.{ts,js,json,md}\" \"*.{ts,js,json,md}\"",
+    "format:check": "npx prettier --check \"packages/**/*.{ts,js,json,md}\" \"*.{ts,js,json,md}\"",
+    "type-check": "tsc --build --noEmit tsconfig.build.json",
+    "type-check:packages": "npm run type-check --workspaces --if-present",
+    "validate": "npm run type-check && npm run lint && npm run test",
+    "validate:packages": "npm run validate --workspaces --if-present",
+    "clean": "rimraf packages/*/dist packages/*/tsconfig.tsbuildinfo",
+    "clean:all": "rimraf node_modules packages/*/node_modules packages/*/dist packages/*/tsconfig.tsbuildinfo",
+    "dev": "npm run build:tsc -- --watch",
+    "audit": "npm audit --audit-level=moderate",
+    "audit:fix": "npm audit fix",
+    "audit:all": "npm run audit --workspaces --if-present && npm audit",
+    "outdated": "npm outdated",
+    "outdated:all": "npm run outdated --workspaces --if-present && npm outdated"
+  },
+  "devDependencies": {
+    "@babel/core": "^7.25.0",
+    "@babel/preset-env": "^7.25.0",
+    "@babel/preset-typescript": "^7.25.0",
+    "@tsconfig/recommended": "^1.0.10",
+    "@types/jest": "^30.0.0",
+    "@types/node": "^24.9.1",
+    "@typescript-eslint/eslint-plugin": "^8.44.0",
+    "@typescript-eslint/parser": "^8.44.0",
+    "babel-jest": "^30.2.0",
+    "commander": "^14.0.1",
+    "esbuild": "^0.25.10",
+    "eslint": "^9.38.0",
+    "eslint-plugin-jest": "^29.0.1",
+    "jest": "^30.2.0",
+    "rimraf": "^6.0.1",
+    "ts-jest": "^29.4.2",
+    "tsup": "^8.0.0",
+    "tsx": "^4.20.5",
+    "turbo": "^2.5.8",
+    "typescript": "^5.9.2"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "@noble/curves": "^2.0.1",
+    "@noble/hashes": "^2.0.1",
+    "@scure/bip32": "^2.0.1",
+    "@scure/bip39": "^2.0.1",
+    "blakejs": "^1.2.1",
+    "jest-environment-jsdom": "^30.2.0",
+    "openapi-fetch": "^0.15.0",
+    "uuid": "^13.0.0"
+  }
+}

@@ -1,0 +1,33 @@
+{
+  "name": "@kasstamp/crypto",
+  "version": "0.0.0",
+  "description": "Cryptographic utilities for Kasstamp",
+  "type": "module",
+  "main": "dist/index.js",
+  "module": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "src",
+    "README.md"
+  ],
+  "sideEffects": false,
+  "license": "ISC",
+  "scripts": {
+    "build": "npm run build:bundle",
+    "build:bundle": "tsup src/index.ts  --dts --format esm --splitting false --clean --no-splitting --sourcemap"
+  },
+  "dependencies": {
+    "@kasstamp/utils": "*",
+    "@kasstamp/kaspa_wasm_sdk": "*"
+  },
+  "devDependencies": {
+    "tsup": "^8.0.0"
+  }
+}

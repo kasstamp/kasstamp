@@ -1,0 +1,39 @@
+# .dockerignore for simple pre-built deployment
+# Note: dist/ is NOT excluded because we need it for the Docker image!
+
+# Development
+node_modules
+src
+public
+
+# Git
+.git
+.gitignore
+
+# Environment files
+.env
+.env.*
+!.env.example
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Build configs (not needed in image)
+*.config.js
+*.config.ts
+tsconfig*.json
+package*.json
+
+# Documentation
+*.md
+README.md
+
+# Other
+.editorconfig
+.prettierrc
+.eslintrc

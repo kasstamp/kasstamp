@@ -1,0 +1,36 @@
+{
+  "name": "@kasstamp/kaspa_wasm_sdk",
+  "version": "0.0.0",
+  "description": "Pure Kaspa WASM bindings from rusty-kaspa - Low-level WASM access only",
+  "type": "module",
+  "main": "dist/index.js",
+  "module": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "src",
+    "nodejs",
+    "web",
+    "README.md"
+  ],
+  "sideEffects": false,
+  "license": "ISC",
+  "scripts": {
+    "build": "npm run build:bundle && npm run build:types",
+    "build:bundle": "tsup src/index.ts --format esm --splitting false --clean --no-splitting --sourcemap",
+    "build:types": "tsc -p tsconfig.json --emitDeclarationOnly"
+  },
+  "devDependencies": {
+    "tsup": "^8.0.0",
+    "typescript": "^5.9.2",
+    "@typescript-eslint/eslint-plugin": "^8.44.0",
+    "@typescript-eslint/parser": "^8.44.0",
+    "eslint": "^9.35.0"
+  }
+}

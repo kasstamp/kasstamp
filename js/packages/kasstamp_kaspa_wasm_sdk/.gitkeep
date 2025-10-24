@@ -1,0 +1,4 @@
+``# This directory contains the Kaspa WASM SDK files
+# Downloaded from: https://github.com/kaspanet/rusty-kaspa/releases
+# 
+# Contents are gitignored but this .gitkeep ensures the directory exists

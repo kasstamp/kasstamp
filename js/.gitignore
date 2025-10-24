@@ -1,0 +1,46 @@
+# Node.js dependencies
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Build outputs
+dist/
+out/
+build/
+.cache/
+.temp/
+*.tsbuildinfo
+
+# Logs
+logs
+*.log
+*.log.*
+
+# Coverage
+coverage/
+.nyc_output/
+
+# Env files
+.env
+.env.*
+!.env.example
+
+# Jest cache
+.jest/
+
+# IDE / Editor
+.vscode/
+.idea/*
+!.idea/codeStyles/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Lock files (if you want npm only, ignore others)
+yarn.lock
+pnpm-lock.yaml

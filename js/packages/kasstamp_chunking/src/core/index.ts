@@ -1,0 +1,1 @@
+export { splitArtifact } from './chunking';
