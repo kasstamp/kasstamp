@@ -130,9 +130,15 @@ export default function PrivacyPage() {
           <section>
             <h2 className="mb-2 text-lg font-medium">10. Contact</h2>
             <p>
-              For inquiries regarding this Privacy Policy or data protection matters, please refer
-              to the contact options provided on our official website.
+              For inquiries regarding this Privacy Policy or data protection matters, please contact us:
             </p>
+            <div className="mt-2">
+              <p><strong>Data Controller:</strong></p>
+              <p>Marcel Sangals and Tjark Fröse</p>
+              <p>Am Knill 152, 22147 Hamburg</p>
+              <p></p>
+              <p>Email: kasstamp@gmail.com</p>
+            </div>
           </section>
         </div>
       </div>

@@ -260,9 +260,11 @@ export default function TermsPage() {
           <section>
             <h2 className="mb-2 text-lg font-medium">16. Contact</h2>
             <p>
-              For legal notices or inquiries regarding these Terms, contact details are available
-              via the project’s official website.
+              For legal notices or inquiries regarding these Terms, please contact us:
             </p>
+            <div className="mt-2">
+              <p>Email: kasstamp@gmail.com</p>
+            </div>
           </section>
         </div>
       </div>
