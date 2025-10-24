@@ -76,14 +76,14 @@ jobs:
         run: |
           cd js
           echo "Checking JS package dependencies..."
-          OUTDATED=$(npm run outdated:all 2>&1 || true)
-          if [ -n "$OUTDATED" ] && [ "$OUTDATED" != "All packages are up to date" ] && [ "$OUTDATED" != "" ]; then
+          # Check if there are any outdated packages by checking exit code
+          if npm run outdated:all > /dev/null 2>&1; then
+            echo "outdated=false" >> $GITHUB_OUTPUT
+          else
             echo "outdated=true" >> $GITHUB_OUTPUT
             echo "OUTDATED_JS<<EOF" >> $GITHUB_OUTPUT
-            echo "$OUTDATED" >> $GITHUB_OUTPUT
+            npm run outdated:all 2>&1 || true
             echo "EOF" >> $GITHUB_OUTPUT
-          else
-            echo "outdated=false" >> $GITHUB_OUTPUT
           fi
 
       - name: Check outdated Web packages
@@ -91,14 +91,14 @@ jobs:
         run: |
           cd web
           echo "Checking Web package dependencies..."
-          OUTDATED=$(npm outdated 2>&1 || true)
-          if [ -n "$OUTDATED" ] && [ "$OUTDATED" != "All packages are up to date" ] && [ "$OUTDATED" != "" ]; then
+          # Check if there are any outdated packages by checking exit code
+          if npm outdated > /dev/null 2>&1; then
+            echo "outdated=false" >> $GITHUB_OUTPUT
+          else
             echo "outdated=true" >> $GITHUB_OUTPUT
             echo "OUTDATED_WEB<<EOF" >> $GITHUB_OUTPUT
-            echo "$OUTDATED" >> $GITHUB_OUTPUT
+            npm outdated 2>&1 || true
             echo "EOF" >> $GITHUB_OUTPUT
-          else
-            echo "outdated=false" >> $GITHUB_OUTPUT
           fi
 
       - name: Create Security Report
