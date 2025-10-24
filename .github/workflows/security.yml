@@ -90,8 +90,9 @@ jobs:
             report += '## 📋 Security Recommendations\n\n';
             report += '- Monitor security advisories for used packages\n';
             report += '- Use `npm audit fix` for automatic security fixes\n';
-            report += '- Review dependency licenses for compliance\n';
-            report += '- Keep dependencies updated via Dependabot\n\n';
+            report += '- Review dependency licenses manually for compliance\n';
+            report += '- Keep dependencies updated via Dependabot\n';
+            report += '- Consider enabling GitHub Advanced Security for enhanced dependency scanning\n\n';
 
             fs.writeFileSync('security-report.md', report);
             console.log('✅ Security report created successfully');
@@ -127,20 +128,6 @@ jobs:
             }
 
 
-  dependency-review:
-    name: Dependency Review
-    runs-on: ubuntu-latest
-    if: github.event_name == 'pull_request'
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Dependency Review
-        uses: actions/dependency-review-action@v4
-        with:
-          fail-on-severity: moderate
-          deny-licenses: GPL-2.0, GPL-3.0, AGPL-3.0, LGPL-2.0, LGPL-2.1, LGPL-3.0
 
   dependabot-check:
     name: Dependabot Security Check
