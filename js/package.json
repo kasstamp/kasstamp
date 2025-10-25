@@ -1,6 +1,6 @@
 {
   "name": "kasstamp",
-  "version": "0.0.0",
+  "version": "0.0.2",
   "private": true,
   "type": "module",
   "description": "KasStamp - Proof of Existence on Kaspa BlockDAG",

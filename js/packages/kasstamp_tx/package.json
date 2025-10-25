@@ -1,6 +1,6 @@
 {
   "name": "@kasstamp/tx",
-  "version": "0.0.0",
+  "version": "0.0.2",
   "description": "Transaction building and processing for Kasstamp",
   "type": "module",
   "main": "dist/index.js",
