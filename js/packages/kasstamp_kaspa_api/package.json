@@ -1,6 +1,6 @@
 {
   "name": "@kasstamp/kaspa_api",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "description": "Utilities for Kasstamp",
   "type": "module",
   "main": "dist/index.js",
