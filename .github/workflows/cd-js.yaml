@@ -41,14 +41,42 @@ jobs:
           echo "📦 New version: ${VERSION}"
           echo "::notice title=Release Version::Building v${VERSION}"
 
-          # 🧾 Bump package.json versions BEFORE tagging
+          # 🧾 Bump package.json versions using npm version (safer than jq)
           echo "Updating package.json files to version ${VERSION}"
-          find . -name "package.json" -not -path "*/node_modules/*" -exec \
-            jq --arg v "$VERSION" '.version=$v' {} > tmp.json \; -exec mv tmp.json {} \;
+          
+          # Update JS root package.json
+          if [ -f "js/package.json" ]; then
+            cd js
+            npm version "$VERSION" --no-git-tag-version
+            cd ..
+            echo "✅ Updated js/package.json to version ${VERSION}"
+          fi
+          
+          # Update web package.json
+          if [ -f "web/package.json" ]; then
+            cd web
+            npm version "$VERSION" --no-git-tag-version
+            cd ..
+            echo "✅ Updated web/package.json to version ${VERSION}"
+          fi
+          
+          # Update individual package versions in js/packages
+          if [ -d "js/packages" ]; then
+            cd js/packages
+            for package_dir in */; do
+              if [ -f "${package_dir}package.json" ]; then
+                cd "$package_dir"
+                npm version "$VERSION" --no-git-tag-version
+                cd ..
+                echo "✅ Updated ${package_dir}package.json to version ${VERSION}"
+              fi
+            done
+            cd ../..
+          fi
 
           git config user.name "GitHub Actions"
           git config user.email "actions@github.com"
-          git add **/package.json
+          git add .
           git commit -m "chore: bump to version ${VERSION}" || echo "No changes to commit"
 
           # 🏷️ Create tag AFTER bump commit
