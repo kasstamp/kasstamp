@@ -77,7 +77,17 @@ jobs:
           git config user.name "GitHub Actions"
           git config user.email "actions@github.com"
           git add .
-          git commit -m "chore: bump to version ${VERSION}" || echo "No changes to commit"
+
+          # Check if there are any staged changes.
+          # git diff-index --cached --quiet HEAD exits with 0 if NO changes, 1 if changes.
+          if git diff-index --cached --quiet HEAD; then
+            echo "::error::No file changes detected after version bump. Failing job."
+            exit 1
+          fi
+
+          # Proceed with commit only if changes were detected
+          echo "Changes detected, proceeding with commit."
+          git commit -m "chore: bump to version ${VERSION}"
 
           # 🏷️ Create tag AFTER bump commit
           git tag -a "${TAG}" -m "Release ${TAG}"
@@ -97,6 +107,8 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
+          # Checkout the new tag created by the 'version' job.
+          ref: 'v${{ needs.version.outputs.version }}'
           fetch-depth: 0
 
       - name: Setup Node.js
@@ -173,11 +185,12 @@ jobs:
             echo "changelog=Initial release" >> $GITHUB_OUTPUT
             echo "prev_tag=" >> $GITHUB_OUTPUT
           else
+            # Use the recommended "delimiter" method for multi-line strings
+            # instead of URL encoding. This preserves newlines.
             CHANGELOG=$(git log ${PREV_TAG}..HEAD --pretty=format:"- %s (%h)" --no-merges)
-            CHANGELOG="${CHANGELOG//'%'/'%25'}"
-            CHANGELOG="${CHANGELOG//$'\n'/'%0A'}"
-            CHANGELOG="${CHANGELOG//$'\r'/'%0D'}"
-            echo "changelog=${CHANGELOG}" >> $GITHUB_OUTPUT
+            echo "changelog<<EOF" >> $GITHUB_OUTPUT
+            echo "${CHANGELOG}" >> $GITHUB_OUTPUT
+            echo "EOF" >> $GITHUB_OUTPUT
             echo "prev_tag=${PREV_TAG}" >> $GITHUB_OUTPUT
           fi
 
