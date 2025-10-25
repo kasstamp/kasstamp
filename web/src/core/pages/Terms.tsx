@@ -260,9 +260,14 @@ export default function TermsPage() {
           <section>
             <h2 className="mb-2 text-lg font-medium">16. Contact</h2>
             <p>
-              For legal notices or inquiries regarding these Terms, please contact us:
+              For any inquiries regarding the privacy or this service, please contact us:
             </p>
             <div className="mt-2">
+              <br />
+              <p>Marcel Sangals and Tjark Fröse</p>
+              <p>Am Knill 152, 22147 Hamburg</p>
+              <br />
+              <p>Website: https://kasstamp.com</p>
               <p>Email: kasstamp@gmail.com</p>
             </div>
           </section>
