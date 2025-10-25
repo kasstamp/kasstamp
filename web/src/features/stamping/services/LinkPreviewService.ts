@@ -63,6 +63,6 @@ export function fetchLinkPreview(url: string): Promise<LinkPreview> {
           'Preview is simulated. In the real version you will see title, description and image.',
         image: undefined,
       };
-    })(),
+    })()
   );
 }

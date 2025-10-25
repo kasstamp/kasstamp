@@ -90,7 +90,7 @@ export class WalletService {
         return 'testnet-10';
       default:
         throw new Error(
-          `Invalid network: ${networkString}. Only 'mainnet' and 'testnet-10' are supported.`,
+          `Invalid network: ${networkString}. Only 'mainnet' and 'testnet-10' are supported.`
         );
     }
   }
@@ -131,7 +131,7 @@ export class WalletService {
 
     if (!targetNetwork) {
       throw new Error(
-        'Network is required for connection. Either provide it as parameter or set VITE_DEFAULT_NETWORK in .env',
+        'Network is required for connection. Either provide it as parameter or set VITE_DEFAULT_NETWORK in .env'
       );
     }
 
@@ -213,7 +213,7 @@ export class WalletService {
     try {
       const isActiveWallet = this.currentWalletName === oldName;
       walletLogger.info(
-        `🔄 Rename request: "${oldName}" -> "${newName}". Is active wallet: ${isActiveWallet}`,
+        `🔄 Rename request: "${oldName}" -> "${newName}". Is active wallet: ${isActiveWallet}`
       );
 
       await walletStorage.renameWallet(oldName, newName);
@@ -232,7 +232,7 @@ export class WalletService {
         });
 
         walletLogger.info(
-          `✅ Wallet service state updated. getState().walletName = "${this.getState().walletName}"`,
+          `✅ Wallet service state updated. getState().walletName = "${this.getState().walletName}"`
         );
       } else {
         walletLogger.info(`ℹ️ Not active wallet, skipping event notification`);
@@ -251,7 +251,7 @@ export class WalletService {
     walletSecret: string,
     words: 12 | 15 | 18 | 21 | 24 = 24,
     passphrase?: string,
-    network?: string,
+    network?: string
   ): Promise<{ wallet: SimpleWallet; mnemonic: string }> {
     if (!this.kaspaSDK) {
       throw new Error('SDK not initialized');
@@ -291,7 +291,7 @@ export class WalletService {
     this.currentAccount = existingAccounts[0];
 
     walletLogger.info(
-      `✅ Wallet created! Address: ${this.currentAccount.receiveAddress?.toString()}`,
+      `✅ Wallet created! Address: ${this.currentAccount.receiveAddress?.toString()}`
     );
 
     // Set up monitoring services using SDK orchestration
@@ -314,7 +314,7 @@ export class WalletService {
     walletName: string,
     walletSecret: string,
     passphrase?: string,
-    network?: string,
+    network?: string
   ): Promise<void> {
     if (!this.kaspaSDK) {
       throw new Error('SDK not initialized');
@@ -349,12 +349,12 @@ export class WalletService {
     try {
       await this.currentWallet.unlockFromPassword(walletSecret);
       walletLogger.info(
-        `✅ Wallet unlocked successfully. Locked state: ${this.currentWallet.locked}`,
+        `✅ Wallet unlocked successfully. Locked state: ${this.currentWallet.locked}`
       );
     } catch (unlockError) {
       walletLogger.error('❌ Failed to unlock wallet after import:', unlockError as Error);
       throw new Error(
-        `Failed to unlock imported wallet: ${unlockError instanceof Error ? unlockError.message : String(unlockError)}`,
+        `Failed to unlock imported wallet: ${unlockError instanceof Error ? unlockError.message : String(unlockError)}`
       );
     }
 
@@ -369,7 +369,7 @@ export class WalletService {
     this.currentAccount = existingAccounts[0];
 
     walletLogger.info(
-      `✅ Wallet imported! Address: ${this.currentAccount.receiveAddress?.toString()}`,
+      `✅ Wallet imported! Address: ${this.currentAccount.receiveAddress?.toString()}`
     );
     walletLogger.info(`📝 Wallet state after import:`, {
       walletName: this.currentWalletName,
@@ -411,13 +411,13 @@ export class WalletService {
       // If no existing accounts, create the first one
       this.currentAccount = await this.currentWallet.deriveNextAccount(0);
       walletLogger.info(
-        `✅ Wallet opened! Created first account: ${this.currentAccount.receiveAddress?.toString()}`,
+        `✅ Wallet opened! Created first account: ${this.currentAccount.receiveAddress?.toString()}`
       );
     } else {
       // Use the first existing account
       this.currentAccount = existingAccounts[0];
       walletLogger.info(
-        `✅ Wallet opened! Loaded existing account: ${this.currentAccount.receiveAddress?.toString()}`,
+        `✅ Wallet opened! Loaded existing account: ${this.currentAccount.receiveAddress?.toString()}`
       );
     }
 
@@ -584,16 +584,16 @@ export class WalletService {
             return [];
           }
           const accountTransactions = await this.currentWallet.getTransactionHistory(
-            account.accountId,
+            account.accountId
           );
           walletLogger.info(
-            `📋 Found ${accountTransactions.length} transactions for account ${account.accountId}`,
+            `📋 Found ${accountTransactions.length} transactions for account ${account.accountId}`
           );
           return accountTransactions;
         } catch (error) {
           walletLogger.warn(
             `⚠️ Failed to get transactions for account ${account.accountId}:`,
-            error as Error,
+            error as Error
           );
           return [];
         }
@@ -671,7 +671,7 @@ export class WalletService {
   // Event system
   addEventListener<T extends WalletServiceEvent>(
     event: T,
-    callback: (data: WalletServiceEventData[T]) => void,
+    callback: (data: WalletServiceEventData[T]) => void
   ): void {
     if (!this.eventListeners.has(event)) {
       this.eventListeners.set(event, []);
@@ -685,7 +685,7 @@ export class WalletService {
 
   removeEventListener<T extends WalletServiceEvent>(
     event: T,
-    callback: (data: WalletServiceEventData[T]) => void,
+    callback: (data: WalletServiceEventData[T]) => void
   ): void {
     // TypeScript limitation: we need to cast because Map doesn't track type correlation
     const listeners = this.eventListeners.get(event) as
@@ -701,7 +701,7 @@ export class WalletService {
 
   private notifyListeners<T extends WalletServiceEvent>(
     event: T,
-    data: WalletServiceEventData[T],
+    data: WalletServiceEventData[T]
   ): void {
     // TypeScript limitation: we need to cast because Map doesn't track type correlation
     const listeners = this.eventListeners.get(event) as
@@ -727,7 +727,7 @@ export class WalletService {
 
     if (![12, 15, 18, 21, 24].includes(wordCount)) {
       throw new Error(
-        `Invalid mnemonic word count: ${wordCount}. Must be 12, 15, 18, 21, or 24 words.`,
+        `Invalid mnemonic word count: ${wordCount}. Must be 12, 15, 18, 21, or 24 words.`
       );
     }
 

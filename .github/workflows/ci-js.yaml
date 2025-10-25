@@ -2,15 +2,8 @@ name: CI - JS
 
 on:
   push:
-    branches: [main, develop]
-    paths:
-      - 'js/**'
-      - 'web/**'
+    branches: [main]
   pull_request:
-    branches: [main, develop]
-    paths:
-      - 'js/**'
-      - 'web/**'
   workflow_dispatch:
 
 env:
@@ -18,9 +11,29 @@ env:
   CACHE_VERSION: 'v1'
 
 jobs:
-  # Lint and TypeScript checks
-  lint-and-typecheck:
-    name: JS Lint & TypeCheck
+  # 1. Runs global format check
+  format-check:
+    name: Format Check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: package-lock.json
+      - name: Install root dependencies
+        run: npm ci
+      - name: Check code formatting
+        run: |
+          echo "🎨 Checking code formatting with Prettier..."
+          npm run format:check
+
+  # Lints, builds, and verifies all JS packages
+  build-js:
+    name: JS Lint, Build & Verify
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -31,12 +44,14 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: 'npm'
-          cache-dependency-path: js/package-lock.json
+          cache-dependency-path: |
+            package-lock.json
+            js/package-lock.json
 
-      - name: Install dependencies
+      - name: Install root dependencies
         run: npm ci
 
-      - name: Install dependencies
+      - name: Install JS dependencies
         working-directory: js
         run: npm ci
 
@@ -44,14 +59,9 @@ jobs:
         uses: actions/cache@v4
         with:
           path: js/.turbo
-          key: ${{ runner.os }}-turbo-${{ github.sha }}
+          key: ${{ runner.os }}-turbo-${{ env.CACHE_VERSION }}-${{ hashFiles('js/package-lock.json') }}
           restore-keys: |
-            ${{ runner.os }}-turbo-
-
-      - name: Check code formatting
-        run: |
-          echo "🎨 Checking code formatting with Prettier..."
-          npm run format:check
+            ${{ runner.os }}-turbo-${{ env.CACHE_VERSION }}-
 
       - name: Run ESLint
         working-directory: js
@@ -61,45 +71,7 @@ jobs:
         working-directory: js
         run: npm run clean
 
-      - name: TypeScript compilation check
-        working-directory: js
-        run: npm run build
-
-  # Build all packages
-  build:
-    name: Build Packages
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        node-version: ['22.x']
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js ${{ matrix.node-version }}
-        uses: actions/setup-node@v4
-        with:
-          node-version: ${{ matrix.node-version }}
-          cache: 'npm'
-          cache-dependency-path: js/package-lock.json
-
-      - name: Install dependencies
-        working-directory: js
-        run: npm ci
-
-      - name: Setup Turbo cache
-        uses: actions/cache@v4
-        with:
-          path: js/.turbo
-          key: ${{ runner.os }}-turbo-${{ matrix.node-version }}-${{ github.sha }}
-          restore-keys: |
-            ${{ runner.os }}-turbo-${{ matrix.node-version }}-
-
-      - name: Clean build cache
-        working-directory: js
-        run: npm run clean
-
-      - name: Build all packages
+      - name: Build all packages (includes TypeScript check)
         working-directory: js
         run: npm run build
 
@@ -148,21 +120,18 @@ jobs:
             fi
           done
 
-  # Test suite
-  test:
-    name: Test Suite
+  # Runs JS tests in parallel with build and format jobs
+  test-js:
+    name: JS Test Suite
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        node-version: ['22.x']
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Setup Node.js ${{ matrix.node-version }}
+      - name: Setup Node.js ${{ env.NODE_VERSION }}
         uses: actions/setup-node@v4
         with:
-          node-version: ${{ matrix.node-version }}
+          node-version: ${{ env.NODE_VERSION }}
           cache: 'npm'
           cache-dependency-path: js/package-lock.json
 
@@ -173,26 +142,14 @@ jobs:
       - name: Run tests with coverage
         working-directory: js
         run: |
-          echo "🧪 Running tests on Node.js ${{ matrix.node-version }}"
-          echo "Node.js version: $(node --version)"
-          echo "Platform: $(node -e "console.log(process.platform)")"
-          echo "WebCrypto available: $(node -e "console.log(!!globalThis.crypto?.subtle)")"
-
-          # Run tests with coverage
+          echo "🧪 Running tests on Node.js ${{ env.NODE_VERSION }}"
           npm test -- --coverage --coverageReporters=text-lcov --coverageReporters=text
 
-      - name: Upload coverage to Codecov
-        if: matrix.node-version == '22.x'
-        uses: codecov/codecov-action@v3
-        with:
-          flags: javascript
-          directory: js/coverage
-
-  # Web Frontend testing
+  # Builds and tests the web-frontend
   web-frontend:
-    name: Web Frontend
+    name: Web Frontend Build & Test
     runs-on: ubuntu-latest
-    needs: [build]
+    needs: [build-js]
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -210,9 +167,19 @@ jobs:
         working-directory: js
         run: npm ci
 
-      - name: Build SDK packages
+      - name: Setup Turbo cache
+        uses: actions/cache@v4
+        with:
+          path: js/.turbo
+          key: ${{ runner.os }}-turbo-${{ env.CACHE_VERSION }}-${{ hashFiles('js/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-turbo-${{ env.CACHE_VERSION }}-
+
+      - name: Build SDK packages (will be instant from cache)
         working-directory: js
-        run: npm run build
+        run: |
+          echo "Building JS packages... (expecting a full cache hit from Turborepo)"
+          npm run build
 
       - name: Install web dependencies
         working-directory: web
@@ -221,10 +188,6 @@ jobs:
       - name: Run ESLint
         working-directory: web
         run: npm run lint
-
-      - name: Clean build cache
-        working-directory: web
-        run: npm run clean
 
       - name: TypeScript type check
         working-directory: web
@@ -254,39 +217,18 @@ jobs:
             done
           fi
 
-  # Deployment readiness check
+  # The final quality gate
   deployment-check:
     name: Deployment Readiness
     runs-on: ubuntu-latest
-    needs: [lint-and-typecheck, build, test, web-frontend]
-    if: github.ref == 'refs/heads/main'
+    needs: [format-check, build-js, test-js, web-frontend]
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: 'npm'
-          cache-dependency-path: js/package-lock.json
-
-      - name: Install dependencies
-        working-directory: js
-        run: npm ci
-
-      - name: Build packages
-        working-directory: js
-        run: npm run build
-
       - name: Verify deployment readiness
-        working-directory: js
         run: |
           echo "🚀 Deployment readiness check:"
+          echo "✅ Code formatting passed"
           echo "✅ All tests passed"
           echo "✅ All packages built successfully"
-          echo "✅ Browser compatibility verified via examples"
-          echo "✅ Code quality checks passed"
           echo "✅ Web frontend built successfully"
           echo ""
           echo "🎉 JavaScript packages and web frontend are ready for deployment!"

@@ -63,7 +63,7 @@ export class QRCodeService {
             }
           },
           'image/png',
-          1.0,
+          1.0
         );
       };
 

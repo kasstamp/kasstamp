@@ -105,8 +105,8 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           <div className="flex items-center justify-between gap-1 sm:gap-2">
             {/* Logo - only icon on mobile, with text on desktop */}
             <Link to="/" className="inline-flex flex-shrink-0 items-center gap-1.5 sm:gap-2">
-              <img src="/logo.webp" alt="KasStamp Logo" className="h-7 w-7 sm:h-8 sm:w-8" />
-              <span className="hidden text-sm font-semibold tracking-tight sm:inline sm:text-base">
+              <img src="/logo.svg" alt="KasStamp Logo" className="h-7 w-7 sm:h-8 sm:w-8" />
+              <span className="text-sm font-semibold tracking-tight sm:inline sm:text-base">
                 KasStamp
               </span>
             </Link>

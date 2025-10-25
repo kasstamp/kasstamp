@@ -22,12 +22,13 @@
   "scripts": {
     "commitlint": "commitlint --edit",
     "commitlint:check": "commitlint --from HEAD~1 --to HEAD --verbose",
-    "format": "npx prettier --write \"**/*.{ts,js,json,md,yaml,yml}\" \"*.{ts,js,json,md,yaml,yml}\"",
-    "format:check": "npx prettier --check \"**/*.{ts,js,json,md,yaml,yml}\" \"*.{ts,js,json,md,yaml,yml}\""
+    "format": "npx prettier --write \"**/*.{ts,js,json,md,yaml,yml,html,svg}\" \"*.{ts,js,json,md,yaml,yml,html,svg}\"",
+    "format:check": "npx prettier --check \"**/*.{ts,js,json,md,yaml,yml,html,svg}\" \"*.{ts,js,json,md,yaml,yml,html,svg}\""
   },
   "devDependencies": {
     "@commitlint/cli": "^20.1.0",
     "@commitlint/config-conventional": "^20.0.0",
+    "@prettier/plugin-xml": "^3.4.2",
     "prettier": "^3.6.2",
     "prettier-plugin-tailwindcss": "^0.7.0"
   },
