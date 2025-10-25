@@ -8,6 +8,13 @@
   "arrowParens": "always",
   "endOfLine": "lf",
   "bracketSpacing": true,
-  "proseWrap": "preserve"
+  "proseWrap": "preserve",
+  "plugins": ["./node_modules/@prettier/plugin-xml/src/plugin.js"],
+  "overrides": [
+    {
+      "files": "*.svg",
+      "options": { "parser": "xml" }
+    }
+  ]
 }
 

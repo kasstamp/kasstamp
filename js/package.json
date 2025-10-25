@@ -29,8 +29,6 @@
     "lint": "eslint . --ext .ts,.js",
     "lint:fix": "eslint . --ext .ts,.js --fix",
     "lint:packages": "npm run lint --workspaces --if-present",
-    "format": "npx prettier --write \"packages/**/*.{ts,js,json,md}\" \"*.{ts,js,json,md}\"",
-    "format:check": "npx prettier --check \"packages/**/*.{ts,js,json,md}\" \"*.{ts,js,json,md}\"",
     "type-check": "tsc --build --noEmit tsconfig.build.json",
     "type-check:packages": "npm run type-check --workspaces --if-present",
     "validate": "npm run type-check && npm run lint && npm run test",

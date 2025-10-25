@@ -78,7 +78,7 @@ export class ErrorHandlingService {
   static async handleReceiptDecryptionError(
     error: Error,
     setError: (message: string) => void,
-    setShowWalletManagement: (show: boolean) => void,
+    setShowWalletManagement: (show: boolean) => void
   ): Promise<void> {
     const result = await this.analyzeWalletError(error);
 

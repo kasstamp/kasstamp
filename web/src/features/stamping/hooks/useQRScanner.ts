@@ -79,7 +79,7 @@ export function useQRScanner() {
                   }
                   pageLogger.info(`🔍 Bytes array length: ${bytes.length}`);
                   pageLogger.info(
-                    `🔍 First few bytes: ${Array.from(bytes.slice(0, 10)).join(',')}`,
+                    `🔍 First few bytes: ${Array.from(bytes.slice(0, 10)).join(',')}`
                   );
 
                   // Decompress with pako
@@ -121,7 +121,7 @@ export function useQRScanner() {
                   }
                   pageLogger.info(`🔍 Bytes array length: ${bytes.length}`);
                   pageLogger.info(
-                    `🔍 First few bytes: ${Array.from(bytes.slice(0, 10)).join(',')}`,
+                    `🔍 First few bytes: ${Array.from(bytes.slice(0, 10)).join(',')}`
                   );
 
                   // Decompress with pako
@@ -167,7 +167,7 @@ export function useQRScanner() {
           },
           () => {
             // Error callback - ignore
-          },
+          }
         );
       } catch (err) {
         const error = err as Error;
@@ -176,7 +176,7 @@ export function useQRScanner() {
         setIsScanning(false);
       }
     },
-    [],
+    []
   );
 
   const stopScanning = useCallback(async (): Promise<void> => {

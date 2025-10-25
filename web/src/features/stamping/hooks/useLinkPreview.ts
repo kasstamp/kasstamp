@@ -41,7 +41,7 @@ export function useLinkPreview(text: string) {
             pageLogger.warn('Failed to fetch link preview', { url, error: error as Error });
             return null;
           }
-        }),
+        })
       );
 
       if (!active) return;

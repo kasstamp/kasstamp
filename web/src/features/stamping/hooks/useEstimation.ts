@@ -76,7 +76,7 @@ export function useEstimation({ mode, isPriority, isConnected, hasWallet }: UseE
           if (cached && Date.now() - cached.timestamp < 5 * 60 * 1000) {
             // 5 minute cache
             pageLogger.info(
-              `📋 Using cached estimation for ${fingerprint.type}: ${fingerprint.key}`,
+              `📋 Using cached estimation for ${fingerprint.type}: ${fingerprint.key}`
             );
             cachedEstimations.push(cached.estimation);
           } else {
@@ -103,7 +103,7 @@ export function useEstimation({ mode, isPriority, isConnected, hasWallet }: UseE
         if (artifactsToCalculate.files.length > 0 || artifactsToCalculate.text) {
           if (isConnected && hasWallet) {
             pageLogger.info(
-              `🔍 Calculating costs for ${artifactsToCalculate.files.length} new files + ${artifactsToCalculate.text ? '1 new text' : '0 new text'}...`,
+              `🔍 Calculating costs for ${artifactsToCalculate.files.length} new files + ${artifactsToCalculate.text ? '1 new text' : '0 new text'}...`
             );
 
             const newCache = new Map(currentCache);
@@ -141,14 +141,14 @@ export function useEstimation({ mode, isPriority, isConnected, hasWallet }: UseE
                 const textEstimation = await estimateMultipleArtifacts(
                   [],
                   artifactsToCalculate.text,
-                  { mode, compression: false, priorityFee },
+                  { mode, compression: false, priorityFee }
                 );
                 if (textEstimation) {
                   newEstimations.push(textEstimation);
                   const fingerprint = getTextFingerprint(
                     artifactsToCalculate.text,
                     mode,
-                    isPriority,
+                    isPriority
                   );
                   const cacheKey = getCacheKey(fingerprint);
                   newCache.set(cacheKey, {
@@ -191,7 +191,7 @@ export function useEstimation({ mode, isPriority, isConnected, hasWallet }: UseE
                 const textEstimation = await estimateMultipleArtifacts(
                   [],
                   artifactsToCalculate.text,
-                  { mode, compression: false, priorityFee },
+                  { mode, compression: false, priorityFee }
                 );
                 if (textEstimation) {
                   newEstimations.push(textEstimation);
@@ -231,7 +231,7 @@ export function useEstimation({ mode, isPriority, isConnected, hasWallet }: UseE
         setIsEstimating(false);
       }
     },
-    [mode, isPriority, isConnected, hasWallet],
+    [mode, isPriority, isConnected, hasWallet]
   );
 
   const clearEstimationState = useCallback(() => {

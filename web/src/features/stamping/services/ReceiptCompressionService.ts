@@ -24,7 +24,7 @@ export class ReceiptCompressionService {
    */
   static compressReceipt(
     receipt: StampingReceipt,
-    baseUrl: string = window.location.origin,
+    baseUrl: string = window.location.origin
   ): CompressionResult {
     const receiptJson = JSON.stringify(receipt);
 
@@ -91,7 +91,7 @@ export class ReceiptCompressionService {
    */
   static getCompressionStats(
     receipt: StampingReceipt,
-    baseUrl: string = window.location.origin,
+    baseUrl: string = window.location.origin
   ): CompressionStats {
     const result = this.compressReceipt(receipt, baseUrl);
 

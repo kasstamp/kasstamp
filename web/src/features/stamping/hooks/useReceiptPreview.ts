@@ -35,7 +35,7 @@ export function useReceiptPreview() {
       const wallet = walletService.getCurrentWallet();
       return await sdk.decryptReceipt(encryptedReceipt, wallet);
     },
-    [],
+    []
   );
 
   const loadImagePreview = useCallback(async (receiptObj: StampingReceipt) => {
@@ -197,7 +197,7 @@ export function useReceiptPreview() {
         setPendingReceipt(receipt);
       }
     },
-    [loadImagePreview, loadTextPreview, walletState.isConnected],
+    [loadImagePreview, loadTextPreview, walletState.isConnected]
   );
 
   const closeReceipt = useCallback(() => {

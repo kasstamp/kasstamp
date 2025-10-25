@@ -19,7 +19,7 @@ export interface ArtifactFingerprint {
 export function getFileFingerprint(
   file: File,
   mode: PrivacyMode,
-  isPriority: boolean,
+  isPriority: boolean
 ): ArtifactFingerprint {
   return {
     type: 'file',
@@ -35,7 +35,7 @@ export function getFileFingerprint(
 export function getTextFingerprint(
   text: string,
   mode: PrivacyMode,
-  isPriority: boolean,
+  isPriority: boolean
 ): ArtifactFingerprint {
   return {
     type: 'text',

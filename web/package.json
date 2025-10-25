@@ -10,8 +10,6 @@
     "clean": "rimraf dist node_modules/.cache",
     "clean:all": "rimraf dist node_modules/.cache .turbo",
     "lint": "eslint .",
-    "format": "prettier . --write",
-    "format:check": "prettier . --check",
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest",

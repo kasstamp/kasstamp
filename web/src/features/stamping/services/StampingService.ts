@@ -40,7 +40,7 @@ const artifactProcessingResults: Map<string, ProcessingResult> = new Map();
 export async function estimateMultipleArtifacts(
   files: File[],
   text: string,
-  options: StampingOptions,
+  options: StampingOptions
 ): Promise<StampingEstimation | null> {
   try {
     const sdk = walletService.getSDK();
@@ -52,7 +52,7 @@ export async function estimateMultipleArtifacts(
     }
 
     stampingLogger.info(
-      `🔍 Running SDK estimation for ${files.length} files + ${text ? '1 text' : '0 text'}...`,
+      `🔍 Running SDK estimation for ${files.length} files + ${text ? '1 text' : '0 text'}...`
     );
 
     const estimations: StampingEstimation[] = [];
@@ -75,7 +75,7 @@ export async function estimateMultipleArtifacts(
             compression: options.compression || false,
             priorityFee: options.priorityFee,
           },
-          wallet || undefined,
+          wallet || undefined
         );
 
         // Convert SDK estimation to web format
@@ -100,7 +100,7 @@ export async function estimateMultipleArtifacts(
             totalCost: `${fileEstimation.totalCostKAS.toFixed(8)} KAS`,
             chunks: fileEstimation.chunkCount,
             method: sdkEstimation.feeCalculationMethod,
-          },
+          }
         );
       } catch (error) {
         stampingLogger.warn(`Failed to estimate file ${file.name}:`, error as Error);
@@ -125,7 +125,7 @@ export async function estimateMultipleArtifacts(
             compression: options.compression || false,
             priorityFee: options.priorityFee,
           },
-          wallet || undefined,
+          wallet || undefined
         );
 
         const textEstimation: StampingEstimation = {
@@ -149,7 +149,7 @@ export async function estimateMultipleArtifacts(
             totalCost: `${textEstimation.totalCostKAS.toFixed(8)} KAS`,
             chunks: textEstimation.chunkCount,
             method: sdkEstimation.feeCalculationMethod,
-          },
+          }
         );
       } catch (error) {
         stampingLogger.warn('Failed to estimate text:', error as Error);
@@ -198,7 +198,7 @@ export async function estimateMultipleArtifacts(
  */
 export async function estimateFileStamping(
   file: File,
-  options: StampingOptions,
+  options: StampingOptions
 ): Promise<StampingEstimation | null> {
   try {
     const sdk = walletService.getSDK();
@@ -219,7 +219,7 @@ export async function estimateFileStamping(
         compression: options.compression || false,
         priorityFee: options.priorityFee,
       },
-      wallet || undefined,
+      wallet || undefined
     );
 
     // Convert SDK estimation to web format
@@ -262,10 +262,10 @@ export async function estimateFileStamping(
  */
 export async function estimateTextStamping(
   text: string,
-  options: StampingOptions,
+  options: StampingOptions
 ): Promise<StampingEstimation | null> {
   stampingLogger.info(
-    `🔍 Fast text estimation for ${text.length} characters in ${options.mode} mode...`,
+    `🔍 Fast text estimation for ${text.length} characters in ${options.mode} mode...`
   );
 
   try {
@@ -300,7 +300,7 @@ export async function estimateTextStamping(
 export async function stampFile(
   file: File,
   options: StampingOptions,
-  walletSecret: string,
+  walletSecret: string
 ): Promise<{ transactionId: string; transactionIds: string[]; receipt: StampingReceipt }> {
   try {
     const sdk = walletService.getSDK();
@@ -325,7 +325,7 @@ export async function stampFile(
         }
       } catch (error) {
         throw new Error(
-          `Failed to unlock wallet: ${error instanceof Error ? error.message : String(error)}`,
+          `Failed to unlock wallet: ${error instanceof Error ? error.message : String(error)}`
         );
       }
     }
@@ -340,7 +340,7 @@ export async function stampFile(
     });
 
     stampingLogger.info(
-      `✅ Stamping completed! Transaction IDs: ${results[0].transactionIds.join(', ')}`,
+      `✅ Stamping completed! Transaction IDs: ${results[0].transactionIds.join(', ')}`
     );
 
     // Use SDK receipt directly - it already has the correct format!
@@ -363,7 +363,7 @@ export async function stampFile(
 export async function stampText(
   text: string,
   options: StampingOptions,
-  walletSecret: string,
+  walletSecret: string
 ): Promise<{ transactionId: string; transactionIds: string[]; receipt: StampingReceipt }> {
   try {
     const sdk = walletService.getSDK();
@@ -388,7 +388,7 @@ export async function stampText(
         }
       } catch (error) {
         throw new Error(
-          `Failed to unlock wallet: ${error instanceof Error ? error.message : String(error)}`,
+          `Failed to unlock wallet: ${error instanceof Error ? error.message : String(error)}`
         );
       }
     }
@@ -403,11 +403,11 @@ export async function stampText(
         walletSecret: walletSecret || '',
         mnemonic: options.mnemonic || '',
         priorityFee: options.priorityFee,
-      },
+      }
     );
 
     stampingLogger.info(
-      `✅ Text stamping completed! Transaction IDs: ${results[0].transactionIds.join(', ')}`,
+      `✅ Text stamping completed! Transaction IDs: ${results[0].transactionIds.join(', ')}`
     );
 
     // Use SDK receipt directly - it already has the correct format!
@@ -433,7 +433,7 @@ export async function stampMultipleArtifacts(
   text: string,
   options: StampingOptions,
   walletSecret?: string,
-  mnemonic?: string,
+  mnemonic?: string
 ): Promise<{ receipts: StampingReceipt[]; totalTransactionIds: string[] }> {
   try {
     const sdk = walletService.getSDK();
@@ -444,7 +444,7 @@ export async function stampMultipleArtifacts(
     }
 
     stampingLogger.info(
-      `💸 Starting batched stamping: ${files.length} files + ${text ? '1 text' : '0 text'}...`,
+      `💸 Starting batched stamping: ${files.length} files + ${text ? '1 text' : '0 text'}...`
     );
 
     // Check if signing enclave is unlocked
@@ -463,7 +463,7 @@ export async function stampMultipleArtifacts(
         }
       } catch (error) {
         throw new Error(
-          `Failed to unlock wallet: ${error instanceof Error ? error.message : String(error)}`,
+          `Failed to unlock wallet: ${error instanceof Error ? error.message : String(error)}`
         );
       }
     }
@@ -501,11 +501,11 @@ export async function stampMultipleArtifacts(
     artifacts.forEach((artifact, i) => {
       if (artifact.type === 'file' && artifact.file) {
         stampingLogger.info(
-          `  ${i + 1}. File: ${artifact.file.name} (${(artifact.file.size / 1024).toFixed(2)} KB)`,
+          `  ${i + 1}. File: ${artifact.file.name} (${(artifact.file.size / 1024).toFixed(2)} KB)`
         );
       } else if (artifact.type === 'text' && artifact.text) {
         stampingLogger.info(
-          `  ${i + 1}. Text: ${artifact.filename} (${artifact.text.length} chars)`,
+          `  ${i + 1}. Text: ${artifact.filename} (${artifact.text.length} chars)`
         );
       }
     });
@@ -528,7 +528,7 @@ export async function stampMultipleArtifacts(
     const allTransactionIds = results.flatMap((result) => result.transactionIds);
 
     stampingLogger.info(
-      `📋 Total receipts: ${receipts.length}, Total transactions: ${allTransactionIds.length}`,
+      `📋 Total receipts: ${receipts.length}, Total transactions: ${allTransactionIds.length}`
     );
 
     return {

@@ -105,7 +105,7 @@ export function useWallet(): [WalletState, WalletActions] {
   useEffect(() => {
     const addEventListener = <T extends WalletServiceEvent>(
       event: T,
-      callback: (data: WalletServiceEventData[T]) => void,
+      callback: (data: WalletServiceEventData[T]) => void
     ) => {
       walletService.addEventListener(event, callback);
       // Store with union type - safe because we only retrieve and call with matching event type
@@ -203,7 +203,7 @@ export function useWallet(): [WalletState, WalletActions] {
         // Safe to cast back - we're passing the same callback to remove that we added
         walletService.removeEventListener(
           event,
-          callback as (data: WalletServiceEventData[typeof event]) => void,
+          callback as (data: WalletServiceEventData[typeof event]) => void
         );
       });
       eventListenersRef.current = [];
@@ -252,7 +252,7 @@ export function useWallet(): [WalletState, WalletActions] {
             params.walletSecret,
             params.words,
             params.passphrase,
-            params.network,
+            params.network
           );
           updateStateFromService();
           return result;
@@ -273,7 +273,7 @@ export function useWallet(): [WalletState, WalletActions] {
             params.walletName,
             params.walletSecret,
             params.passphrase,
-            params.network,
+            params.network
           );
           updateStateFromService();
         } catch (error) {
@@ -375,7 +375,7 @@ export function useWallet(): [WalletState, WalletActions] {
         }
       },
     }),
-    [updateStateFromService],
+    [updateStateFromService]
   );
 
   // Merge isConnecting state
