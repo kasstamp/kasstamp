@@ -96,7 +96,7 @@ jobs:
 
           # Proceed with commit only if changes were detected
           echo "Changes detected, proceeding with commit."
-          git commit -m "chore: bump to version ${VERSION}"
+          git commit -m "chore(global): bump to version ${VERSION}"
 
           # Create a new branch for the version bump
           BRANCH_NAME="release/v${VERSION}"
