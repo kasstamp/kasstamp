@@ -18,6 +18,7 @@ jobs:
       version: ${{ steps.calc.outputs.version }}
     permissions:
       contents: write
+      pull-requests: write
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -91,8 +92,22 @@ jobs:
 
           # 🏷️ Create tag AFTER bump commit
           git tag -a "${TAG}" -m "Release ${TAG}"
-          git push origin
+
+          # Create a new branch for the version bump
+          BRANCH_NAME="release/v${VERSION}"
+          git checkout -b "${BRANCH_NAME}"
+
+          # Push the branch and tag
+          git push origin "${BRANCH_NAME}"
           git push origin "${TAG}"
+
+          # Create Pull Request using GitHub CLI
+          gh pr create \
+            --title "chore(global): bump release version ${VERSION}" \
+            --body "Automated release version bump to ${VERSION}" \
+            --base main \
+            --head "${BRANCH_NAME}" \
+            --label "release"
 
           echo "version=${VERSION}" >> $GITHUB_OUTPUT
 
