@@ -14,8 +14,11 @@ const getEnv = (key: string, defaultValue?: string): string => {
 
 // Application Configuration
 export const APP_CONFIG = {
-  // Default network (resolver will find the best nodes automatically)
-  defaultNetwork: getEnv('VITE_DEFAULT_NETWORK', 'testnet-10'),
+  // Default network - use mainnet in production, testnet-10 in development
+  defaultNetwork: getEnv(
+    'VITE_DEFAULT_NETWORK',
+    process.env.NODE_ENV === 'production' ? 'mainnet' : 'testnet-10'
+  ),
 
   // Priority fee for transactions (in sompi)
   // Default: 1000 sompi = 0.00001 KAS
@@ -31,7 +34,9 @@ export const APP_CONFIG = {
   healthCheckInterval: parseInt(getEnv('VITE_HEALTH_CHECK_INTERVAL', '30000')), // 30 seconds between health checks
 
   // Feature flags
-  showDebugLogs: getEnv('VITE_DEBUG', 'true').toLowerCase() === 'true',
+  showDebugLogs:
+    getEnv('VITE_DEBUG', process.env.NODE_ENV === 'production' ? 'false' : 'true').toLowerCase() ===
+    'true',
   enableAutoConnect: getEnv('VITE_AUTO_CONNECT', 'true').toLowerCase() === 'true',
 };
 
