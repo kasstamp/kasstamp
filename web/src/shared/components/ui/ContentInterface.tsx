@@ -1,16 +1,8 @@
 import React from 'react';
-import { Button } from './Button';
-import { Toggle } from './Toggle';
-import { Tooltip } from './Tooltip';
-import { FileUp, Lock, X, ArrowUp, Loader2, Zap, Plus, QrCode } from 'lucide-react';
-
-export type LinkPreviewItem = {
-  kind: 'generic' | 'tweet';
-  url: string;
-  siteName?: string;
-  description?: string;
-  tweet?: { handle: string; text: string };
-};
+import {Button} from './Button';
+import {Toggle} from './Toggle';
+import {Tooltip} from './Tooltip';
+import {FileUp, Lock, X, ArrowUp, Loader2, Zap, Plus, QrCode} from 'lucide-react';
 
 export interface ContentInterfaceProps {
   // Text
@@ -24,9 +16,6 @@ export interface ContentInterfaceProps {
   onDragLeave: (e: React.DragEvent) => void;
   onDrop: (e: React.DragEvent) => void;
   onDragEnd?: (e: React.DragEvent) => void;
-
-  // Link previews
-  linkPreviews: LinkPreviewItem[];
 
   // Attachments
   attachments: File[];
@@ -67,7 +56,6 @@ export function ContentInterface(props: ContentInterfaceProps) {
     onDragLeave,
     onDrop,
     onDragEnd,
-    linkPreviews,
     attachments,
     imageURLs,
     onRemoveAttachment,
@@ -100,7 +88,7 @@ export function ContentInterface(props: ContentInterfaceProps) {
         </div>
         <textarea
           rows={1}
-          placeholder="Enter file reciept, text or drag files here"
+          placeholder="Enter file receipt, text or drag files here"
           value={text}
           onChange={(e) => {
             onTextChange(e.target.value);
@@ -110,48 +98,6 @@ export function ContentInterface(props: ContentInterfaceProps) {
             textarea.style.height = Math.min(textarea.scrollHeight, 600) + 'px';
           }}
         />
-
-        {linkPreviews.length > 0 && (
-          <div className="mt-3 space-y-2">
-            {linkPreviews.map((preview, idx) => (
-              <div
-                key={idx}
-                className="rounded-3xl border border-[var(--border-primary)] bg-[var(--background)] p-3 text-[color:var(--text-primary)] transition-colors hover:border-[var(--border-secondary)] hover:bg-[var(--bg-secondary)]"
-              >
-                {preview.kind === 'tweet' ? (
-                  <div className="text-sm">
-                    <div className="font-medium">Post on X</div>
-                    <div className="text-[color:var(--text-secondary)]">
-                      {preview.tweet?.handle}
-                    </div>
-                    <p className="mt-2">{preview.tweet?.text}</p>
-                    <a
-                      className="text-emerald-700 underline hover:text-emerald-800 dark:text-emerald-400 dark:hover:text-emerald-300"
-                      href={preview.url}
-                      target="_blank"
-                      rel="noreferrer"
-                    >
-                      Open original
-                    </a>
-                  </div>
-                ) : (
-                  <div className="text-sm">
-                    <div className="font-medium">{preview.siteName}</div>
-                    <p className="text-[color:var(--text-secondary)]">{preview.description}</p>
-                    <a
-                      className="text-emerald-700 underline hover:text-emerald-800 dark:text-emerald-400 dark:hover:text-emerald-300"
-                      href={preview.url}
-                      target="_blank"
-                      rel="noreferrer"
-                    >
-                      Open link
-                    </a>
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-        )}
 
         {attachments.length > 0 && (
           <div className="mt-3 flex flex-wrap gap-2">
@@ -167,7 +113,7 @@ export function ContentInterface(props: ContentInterfaceProps) {
                     className="h-10 w-10 flex-shrink-0 rounded object-cover"
                   />
                 ) : (
-                  <FileUp className="h-3.5 w-3.5 flex-shrink-0 text-[color:var(--text-secondary)]" />
+                  <FileUp className="h-3.5 w-3.5 flex-shrink-0 text-[color:var(--text-secondary)]"/>
                 )}
                 <span className="max-w-[120px] truncate sm:max-w-[200px]">{f.name}</span>
                 <Button
@@ -177,7 +123,7 @@ export function ContentInterface(props: ContentInterfaceProps) {
                   onClick={() => onRemoveAttachment(idx)}
                   className="h-6 w-6 rounded p-0"
                 >
-                  <X className="h-3.5 w-3.5" />
+                  <X className="h-3.5 w-3.5"/>
                 </Button>
               </div>
             ))}
@@ -195,8 +141,8 @@ export function ContentInterface(props: ContentInterfaceProps) {
                 onClick={() => fileInputRef.current?.click()}
                 aria-label="Attach files"
               >
-                <Plus className="h-5 w-5 sm:hidden" />
-                <FileUp className="hidden h-4 w-4 sm:block" />
+                <Plus className="h-5 w-5 sm:hidden"/>
+                <FileUp className="hidden h-4 w-4 sm:block"/>
                 <span className="hidden sm:inline">Attachment</span>
               </Button>
               <input
@@ -218,7 +164,7 @@ export function ContentInterface(props: ContentInterfaceProps) {
                   onClick={onScanQR}
                   aria-label="Scan QR code"
                 >
-                  <QrCode className="h-5 w-5" />
+                  <QrCode className="h-5 w-5"/>
                 </Button>
               </Tooltip>
             )}
@@ -229,7 +175,7 @@ export function ContentInterface(props: ContentInterfaceProps) {
                 size="sm"
                 className="px-2 py-1.5 text-xs sm:px-3 sm:py-2 sm:text-base [&_.toggle]:h-5 [&_.toggle]:w-9 sm:[&_.toggle]:h-6 sm:[&_.toggle]:w-11 [&_.toggle-indicator]:h-4 [&_.toggle-indicator]:w-4 sm:[&_.toggle-indicator]:h-5 sm:[&_.toggle-indicator]:w-5"
                 label={<span className="hidden text-sm sm:inline sm:text-base">Private</span>}
-                prefix={<Lock className="h-4 w-4" />}
+                prefix={<Lock className="h-4 w-4"/>}
                 checked={mode === 'private'}
                 onCheckedChange={(v: boolean) => onModeChange(v ? 'private' : 'public')}
                 aria-label="Toggle private mode"
@@ -240,7 +186,7 @@ export function ContentInterface(props: ContentInterfaceProps) {
                 size="sm"
                 className="px-2 py-1.5 text-xs sm:px-3 sm:py-2 sm:text-base [&_.toggle]:h-5 [&_.toggle]:w-9 sm:[&_.toggle]:h-6 sm:[&_.toggle]:w-11 [&_.toggle-indicator]:h-4 [&_.toggle-indicator]:w-4 sm:[&_.toggle-indicator]:h-5 sm:[&_.toggle-indicator]:w-5"
                 label={<span className="hidden text-sm sm:inline sm:text-base">Priority</span>}
-                prefix={<Zap className="h-4 w-4" />}
+                prefix={<Zap className="h-4 w-4"/>}
                 checked={isPriority}
                 onCheckedChange={onPriorityChange}
                 aria-label="Toggle priority mode"
@@ -259,9 +205,9 @@ export function ContentInterface(props: ContentInterfaceProps) {
               aria-label="Save"
             >
               {saving ? (
-                <Loader2 className="h-5 w-5 animate-spin" />
+                <Loader2 className="h-5 w-5 animate-spin"/>
               ) : (
-                <ArrowUp className="h-5 w-5" strokeWidth={3} />
+                <ArrowUp className="h-5 w-5" strokeWidth={3}/>
               )}
             </Button>
           </div>

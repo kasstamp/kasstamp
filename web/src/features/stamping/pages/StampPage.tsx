@@ -11,7 +11,6 @@ import type { StampingReceipt } from '@kasstamp/sdk';
 import {
   useEstimation,
   useFileUpload,
-  useLinkPreview,
   useReceiptPreview,
   useQRScanner,
 } from '../hooks';
@@ -68,7 +67,6 @@ export default function StampPage() {
 
   // Custom hooks for complex logic
   const fileUpload = useFileUpload();
-  const linkPreviews = useLinkPreview(text);
   const estimation = useEstimation({
     mode,
     isPriority,
@@ -494,23 +492,6 @@ export default function StampPage() {
       pageLogger.info(
         `✅ All artifacts stamped successfully! Total receipts: ${result.receipts.length}`,
       );
-
-      // Also stamp link previews if they exist
-      for (const preview of linkPreviews) {
-        if (preview?.kind === 'tweet' && preview?.tweet?.text) {
-          try {
-            pageLogger.info('📝 Stamping tweet text...');
-            await stampMultipleArtifacts([], preview.tweet.text, {
-              mode,
-              compression: false,
-              priorityFee,
-            });
-          } catch (error) {
-            pageLogger.warn('Failed to stamp tweet text:', error as Error);
-            // Don't fail the whole operation for tweet text
-          }
-        }
-      }
     } catch (error) {
       setError('Stamping failed: ' + (error as Error).message);
     } finally {
@@ -565,7 +546,6 @@ export default function StampPage() {
         onDragLeave={fileUpload.onDragLeave}
         onDrop={handleDrop}
         onDragEnd={handleDragEnd}
-        linkPreviews={linkPreviews}
         attachments={fileUpload.attachments}
         imageURLs={fileUpload.imageURLs}
         onRemoveAttachment={(i: number) => {
