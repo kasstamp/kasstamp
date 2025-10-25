@@ -1,6 +1,6 @@
 {
   "name": "@kasstamp/stamping",
-  "version": "0.0.4",
+  "version": "0.0.5",
   "description": "File stamping functionality for Kasstamp",
   "type": "module",
   "main": "dist/index.js",
