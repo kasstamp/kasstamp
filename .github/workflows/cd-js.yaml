@@ -43,7 +43,7 @@ jobs:
 
           # 🧾 Bump package.json versions using npm version (safer than jq)
           echo "Updating package.json files to version ${VERSION}"
-          
+
           # Update JS root package.json
           if [ -f "js/package.json" ]; then
             cd js
@@ -51,7 +51,7 @@ jobs:
             cd ..
             echo "✅ Updated js/package.json to version ${VERSION}"
           fi
-          
+
           # Update web package.json
           if [ -f "web/package.json" ]; then
             cd web
@@ -59,7 +59,7 @@ jobs:
             cd ..
             echo "✅ Updated web/package.json to version ${VERSION}"
           fi
-          
+
           # Update individual package versions in js/packages
           if [ -d "js/packages" ]; then
             cd js/packages
