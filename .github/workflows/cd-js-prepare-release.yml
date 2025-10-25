@@ -16,17 +16,27 @@ jobs:
     permissions:
       contents: write
       pull-requests: write
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
+      - name: Generate GitHub App Token
+        id: app-token
+        uses: actions/github-app-token@v1
+        with:
+          app-id: ${{ secrets.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+
       - name: Calculate and create version tag
         id: calc
         env:
-          GH_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
         run: |
+          set -euo pipefail
+
           LATEST_TAG=$(git tag -l "v${{ env.VERSION_MAJOR }}.${{ env.VERSION_MINOR }}.*" | sort -V | tail -n 1)
           if [ -z "$LATEST_TAG" ]; then
             PATCH=1
@@ -41,7 +51,7 @@ jobs:
           echo "📦 New version: ${VERSION}"
           echo "::notice title=Release Version::Building v${VERSION}"
 
-          # 🧾 Bump package.json versions using npm version (safer than jq)
+          # Bump package.json versions
           echo "Updating package.json files to version ${VERSION}"
 
           # Update JS root package.json
@@ -74,12 +84,11 @@ jobs:
             cd ../..
           fi
 
-          git config user.name "GitHub Actions"
+          git config user.name "kasstamp-release-bot"
           git config user.email "actions@github.com"
           git add .
 
           # Check if there are any staged changes.
-          # git diff-index --cached --quiet HEAD exits with 0 if NO changes, 1 if changes.
           if git diff-index --cached --quiet HEAD; then
             echo "::error::No file changes detected after version bump. Failing job."
             exit 1
@@ -93,10 +102,11 @@ jobs:
           BRANCH_NAME="release/v${VERSION}"
           git checkout -b "${BRANCH_NAME}"
 
-          # Push the branch (tag will be created after PR merge)
+          # Push the branch
           git push origin "${BRANCH_NAME}"
 
-          # Create Pull Request using GitHub CLI
+          # Create Pull Request with GitHub App token
+          echo "Creating pull request for ${BRANCH_NAME}"
           gh pr create \
             --title "chore(global): bump release version ${VERSION}" \
             --body "Automated release version bump to ${VERSION}" \
