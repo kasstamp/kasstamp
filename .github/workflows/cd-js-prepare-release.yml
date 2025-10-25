@@ -1,0 +1,107 @@
+name: CD - JS Prepare Release
+
+on:
+  workflow_dispatch:
+
+env:
+  VERSION_MAJOR: '0'
+  VERSION_MINOR: '0'
+
+jobs:
+  version:
+    name: Calculate Version
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.calc.outputs.version }}
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Calculate and create version tag
+        id: calc
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          LATEST_TAG=$(git tag -l "v${{ env.VERSION_MAJOR }}.${{ env.VERSION_MINOR }}.*" | sort -V | tail -n 1)
+          if [ -z "$LATEST_TAG" ]; then
+            PATCH=1
+          else
+            PATCH=$(echo "$LATEST_TAG" | sed 's/v${{ env.VERSION_MAJOR }}\.${{ env.VERSION_MINOR }}\.//')
+            PATCH=$((PATCH + 1))
+          fi
+          VERSION="${{ env.VERSION_MAJOR }}.${{ env.VERSION_MINOR }}.${PATCH}"
+          TAG="v${VERSION}"
+
+          echo "📦 Latest tag: ${LATEST_TAG:-none}"
+          echo "📦 New version: ${VERSION}"
+          echo "::notice title=Release Version::Building v${VERSION}"
+
+          # 🧾 Bump package.json versions using npm version (safer than jq)
+          echo "Updating package.json files to version ${VERSION}"
+
+          # Update JS root package.json
+          if [ -f "js/package.json" ]; then
+            cd js
+            npm version "$VERSION" --no-git-tag-version
+            cd ..
+            echo "✅ Updated js/package.json to version ${VERSION}"
+          fi
+
+          # Update web package.json
+          if [ -f "web/package.json" ]; then
+            cd web
+            npm version "$VERSION" --no-git-tag-version
+            cd ..
+            echo "✅ Updated web/package.json to version ${VERSION}"
+          fi
+
+          # Update individual package versions in js/packages
+          if [ -d "js/packages" ]; then
+            cd js/packages
+            for package_dir in */; do
+              if [ -f "${package_dir}package.json" ]; then
+                cd "$package_dir"
+                npm version "$VERSION" --no-git-tag-version
+                cd ..
+                echo "✅ Updated ${package_dir}package.json to version ${VERSION}"
+              fi
+            done
+            cd ../..
+          fi
+
+          git config user.name "GitHub Actions"
+          git config user.email "actions@github.com"
+          git add .
+
+          # Check if there are any staged changes.
+          # git diff-index --cached --quiet HEAD exits with 0 if NO changes, 1 if changes.
+          if git diff-index --cached --quiet HEAD; then
+            echo "::error::No file changes detected after version bump. Failing job."
+            exit 1
+          fi
+
+          # Proceed with commit only if changes were detected
+          echo "Changes detected, proceeding with commit."
+          git commit -m "chore: bump to version ${VERSION}"
+
+          # Create a new branch for the version bump
+          BRANCH_NAME="release/v${VERSION}"
+          git checkout -b "${BRANCH_NAME}"
+
+          # Push the branch (tag will be created after PR merge)
+          git push origin "${BRANCH_NAME}"
+
+          # Create Pull Request using GitHub CLI
+          gh pr create \
+            --title "chore(global): bump release version ${VERSION}" \
+            --body "Automated release version bump to ${VERSION}" \
+            --base main \
+            --head "${BRANCH_NAME}" \
+            --label "release"
+
+          echo "version=${VERSION}" >> $GITHUB_OUTPUT

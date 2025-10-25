@@ -1,120 +1,17 @@
-name: CD - JS
+name: CD - JS Release
 
 on:
   workflow_dispatch:
 
 env:
-  VERSION_MAJOR: '0'
-  VERSION_MINOR: '0'
   NODE_VERSION: '22.x'
   REGISTRY: 'registry.gitlab.com'
   IMAGE_NAME: 'registry.gitlab.com/kasdag/kasstamp_web'
 
 jobs:
-  version:
-    name: Calculate Version
+  release:
+    name: Create Release v${{ steps.version.outputs.version }}
     runs-on: ubuntu-latest
-    outputs:
-      version: ${{ steps.calc.outputs.version }}
-    permissions:
-      contents: write
-      pull-requests: write
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Calculate and create version tag
-        id: calc
-        run: |
-          LATEST_TAG=$(git tag -l "v${{ env.VERSION_MAJOR }}.${{ env.VERSION_MINOR }}.*" | sort -V | tail -n 1)
-          if [ -z "$LATEST_TAG" ]; then
-            PATCH=1
-          else
-            PATCH=$(echo "$LATEST_TAG" | sed 's/v${{ env.VERSION_MAJOR }}\.${{ env.VERSION_MINOR }}\.//')
-            PATCH=$((PATCH + 1))
-          fi
-          VERSION="${{ env.VERSION_MAJOR }}.${{ env.VERSION_MINOR }}.${PATCH}"
-          TAG="v${VERSION}"
-
-          echo "📦 Latest tag: ${LATEST_TAG:-none}"
-          echo "📦 New version: ${VERSION}"
-          echo "::notice title=Release Version::Building v${VERSION}"
-
-          # 🧾 Bump package.json versions using npm version (safer than jq)
-          echo "Updating package.json files to version ${VERSION}"
-
-          # Update JS root package.json
-          if [ -f "js/package.json" ]; then
-            cd js
-            npm version "$VERSION" --no-git-tag-version
-            cd ..
-            echo "✅ Updated js/package.json to version ${VERSION}"
-          fi
-
-          # Update web package.json
-          if [ -f "web/package.json" ]; then
-            cd web
-            npm version "$VERSION" --no-git-tag-version
-            cd ..
-            echo "✅ Updated web/package.json to version ${VERSION}"
-          fi
-
-          # Update individual package versions in js/packages
-          if [ -d "js/packages" ]; then
-            cd js/packages
-            for package_dir in */; do
-              if [ -f "${package_dir}package.json" ]; then
-                cd "$package_dir"
-                npm version "$VERSION" --no-git-tag-version
-                cd ..
-                echo "✅ Updated ${package_dir}package.json to version ${VERSION}"
-              fi
-            done
-            cd ../..
-          fi
-
-          git config user.name "GitHub Actions"
-          git config user.email "actions@github.com"
-          git add .
-
-          # Check if there are any staged changes.
-          # git diff-index --cached --quiet HEAD exits with 0 if NO changes, 1 if changes.
-          if git diff-index --cached --quiet HEAD; then
-            echo "::error::No file changes detected after version bump. Failing job."
-            exit 1
-          fi
-
-          # Proceed with commit only if changes were detected
-          echo "Changes detected, proceeding with commit."
-          git commit -m "chore: bump to version ${VERSION}"
-
-          # 🏷️ Create tag AFTER bump commit
-          git tag -a "${TAG}" -m "Release ${TAG}"
-
-          # Create a new branch for the version bump
-          BRANCH_NAME="release/v${VERSION}"
-          git checkout -b "${BRANCH_NAME}"
-
-          # Push the branch and tag
-          git push origin "${BRANCH_NAME}"
-          git push origin "${TAG}"
-
-          # Create Pull Request using GitHub CLI
-          gh pr create \
-            --title "chore(global): bump release version ${VERSION}" \
-            --body "Automated release version bump to ${VERSION}" \
-            --base main \
-            --head "${BRANCH_NAME}" \
-            --label "release"
-
-          echo "version=${VERSION}" >> $GITHUB_OUTPUT
-
-  build:
-    name: Build and Release v${{ needs.version.outputs.version }}
-    runs-on: ubuntu-latest
-    needs: version
     permissions:
       contents: write
       packages: write
@@ -122,9 +19,32 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          # Checkout the new tag created by the 'version' job.
-          ref: 'v${{ needs.version.outputs.version }}'
           fetch-depth: 0
+
+      - name: Extract version from package.json
+        id: version
+        run: |
+          # Get version from js/package.json (main version)
+          VERSION=$(node -p "require('./web/package.json').version")
+          echo "📦 Detected version: ${VERSION}"
+          echo "version=${VERSION}" >> $GITHUB_OUTPUT
+
+      - name: Create release tag
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          TAG="v${VERSION}"
+
+          # Check if tag already exists
+          if git tag -l "${TAG}" | grep -q "${TAG}"; then
+            echo "⚠️ Tag ${TAG} already exists, skipping creation"
+          else
+            echo "🏷️ Creating release tag ${TAG} on main branch"
+            git config user.name "GitHub Actions"
+            git config user.email "actions@github.com"
+            git tag -a "${TAG}" -m "Release ${TAG}"
+            git push origin "${TAG}"
+            echo "✅ Tag ${TAG} created and pushed"
+          fi
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -172,7 +92,7 @@ jobs:
       - name: Build and push Docker image
         working-directory: web
         run: |
-          VERSION="${{ needs.version.outputs.version }}"
+          VERSION="${{ steps.version.outputs.version }}"
 
           echo "🐳 Building production Docker image..."
           echo "   Version: ${VERSION}"
@@ -194,6 +114,8 @@ jobs:
       - name: Generate changelog
         id: changelog
         run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          CURRENT_TAG="v${VERSION}"
           PREV_TAG=$(git describe --abbrev=0 --tags $(git rev-list --tags --skip=1 --max-count=1) 2>/dev/null || echo "")
 
           if [ -z "$PREV_TAG" ]; then
@@ -214,7 +136,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          VERSION="${{ needs.version.outputs.version }}"
+          VERSION="${{ steps.version.outputs.version }}"
           TAG="v${VERSION}"
           CHANGELOG="${{ steps.changelog.outputs.changelog }}"
           PREV_TAG="${{ steps.changelog.outputs.prev_tag }}"
@@ -249,7 +171,7 @@ jobs:
 
       - name: Release Summary
         run: |
-          VERSION="${{ needs.version.outputs.version }}"
+          VERSION="${{ steps.version.outputs.version }}"
 
           echo "## 🎉 Release v${VERSION} Complete!" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
