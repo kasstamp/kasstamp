@@ -333,6 +333,14 @@ export default function ReceiptPreviewDialog({
                 <span className="text-[color:var(--text)]">Mode:</span>{' '}
                 <span className="text-[color:var(--text-strong)]">{receipt?.privacy ?? '—'}</span>
               </div>
+              <div>
+                <span className="text-[color:var(--text)]">Uploaded:</span>{' '}
+                <span className="text-[color:var(--text-strong)]">
+                  {receipt?.timestamp
+                    ? new Date(receipt.timestamp).toLocaleString()
+                    : '—'}
+                </span>
+              </div>
             </div>
 
             {downloading && (
