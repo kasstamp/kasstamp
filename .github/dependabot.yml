@@ -14,8 +14,9 @@ updates:
     assignees:
       - "kasstamp"
     commit-message:
-      prefix: "chore"
-      include: "scope"
+      prefix: "chore(global)"
+      prefix-development: "chore(global)"
+      include: "none"
     labels:
       - "dependencies"
       - "javascript"
@@ -51,8 +52,9 @@ updates:
     assignees:
       - "kasstamp"
     commit-message:
-      prefix: "chore"
-      include: "scope"
+      prefix: "chore(global)"
+      prefix-development: "chore(global)"
+      include: "none"
     labels:
       - "dependencies"
       - "web"
