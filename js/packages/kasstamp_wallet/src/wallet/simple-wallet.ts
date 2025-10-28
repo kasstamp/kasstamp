@@ -9,7 +9,6 @@ import type {
   PendingTransaction,
   UtxoContext,
   UtxoEntry,
-  UtxoEntryReference,
   UtxoProcessor,
   Wallet as WasmWallet,
 } from '@kasstamp/kaspa_wasm_sdk';
@@ -441,11 +440,13 @@ export class SimpleWalletImpl implements SimpleWallet {
   }
 
   /**
-   * Get UTXOs for an account using UtxoContext (like Kasia does)
-   * This is a synchronous query of current wallet state - does NOT wait for discovery
-   * If you need to wait for UTXOs, call waitForUtxos() instead
+   * Get UTXOs for a specific account
+   *
+   * This method collects ALL addresses from the specified account (receive, change, and derived)
+   * and queries UTXOs for all of them. This ensures we find UTXOs on any derived address.
+   *
    * @param accountId - The account ID to get UTXOs for
-   * @returns Array of UTXOs - either UtxoEntry instances from accountsGetUtxos or IUtxoEntry-compatible objects from UtxoContext
+   * @returns Array of all UTXOs from all addresses of this account
    */
   async getUtxos(accountId: string): Promise<Array<UtxoEntry>> {
     if (this.locked) {
@@ -455,213 +456,86 @@ export class SimpleWalletImpl implements SimpleWallet {
     try {
       walletLogger.debug(`📦 Getting UTXOs for account: ${accountId}`);
 
-      // Get the account to find the address
+      // Find the specific account
       const account = this.accounts.find((acc) => acc.accountId === accountId);
-      if (!account || !account.receiveAddress) {
-        walletLogger.debug('📦 No receive address found for account');
+      if (!account) {
+        walletLogger.warn(`📦 Account ${accountId} not found`);
         return [];
       }
 
-      const address = account.receiveAddress.toString();
-      walletLogger.debug(`📦 Looking for UTXOs for address: ${address}`);
+      // Collect ALL addresses from THIS account (receive, change, AND addresses array)
+      const allAddresses: string[] = [];
+      const accountShortId = account.accountId.substring(0, 8);
 
-      // Try to get UTXOs from our own UtxoContext (like Kasia does)
-      try {
-        if (this.context) {
-          walletLogger.debug('📦 Found our UtxoContext, checking for UTXOs...');
-
-          // Get mature UTXOs (like Kasia does)
-          if (this.context.getMatureRange && this.context.matureLength !== undefined) {
-            const matureUtxos = this.context.getMatureRange(0, this.context.matureLength);
-            walletLogger.debug(
-              `📦 Found ${matureUtxos?.length || 0} mature UTXOs from our context`
-            );
-
-            // Get pending UTXOs as well
-            let pendingUtxos: UtxoEntryReference[] = [];
-            if (this.context.getPending) {
-              pendingUtxos = this.context.getPending() || [];
-              walletLogger.debug(`📦 Found ${pendingUtxos.length} pending UTXOs from our context`);
-            }
-
-            // Combine mature and pending UTXOs
-            const allUtxos = [...(matureUtxos || []), ...pendingUtxos];
-            walletLogger.debug(
-              `📦 Total UTXOs from our context: ${allUtxos.length} (${matureUtxos?.length || 0} mature + ${pendingUtxos.length} pending)`
-            );
-
-            if (allUtxos.length > 0) {
-              walletLogger.debug(`📦 Returning ${allUtxos.length} UTXOs from context`);
-              // UtxoEntryReference is compatible with UtxoEntry
-              return allUtxos as UtxoEntry[];
-            }
-          } else {
-            walletLogger.debug(
-              '📦 Our UtxoContext found but getMatureRange or matureLength not available'
-            );
-          }
-        } else {
-          walletLogger.debug(
-            '📦 No UtxoContext available - need to initialize UTXO processor first'
-          );
-        }
-      } catch (contextError) {
-        walletLogger.warn('📦 Failed to get UTXOs from our context:', contextError as Error);
+      // Add receive address
+      if (account.receiveAddress) {
+        allAddresses.push(account.receiveAddress.toString());
+        walletLogger.debug(`📦 + Receive: ${account.receiveAddress.toString()}`);
       }
 
-      // If context doesn't have enough UTXOs, try to refresh it
-      if (
-        this.context &&
-        this.context.matureLength !== undefined &&
-        this.context.matureLength < 2
-      ) {
-        walletLogger.debug('📦 Context has limited UTXOs, trying to refresh tracking...');
-        try {
-          // Re-track addresses to ensure we have all UTXOs
-          const addressesToTrack: string[] = [];
-          for (const account of this.accounts) {
-            if (account.receiveAddress) {
-              addressesToTrack.push(account.receiveAddress.toString());
-            }
-            if (account.changeAddress) {
-              addressesToTrack.push(account.changeAddress.toString());
-            }
-          }
-
-          if (addressesToTrack.length > 0) {
-            walletLogger.debug('📦 Re-tracking addresses for better UTXO discovery...');
-            await this.context.trackAddresses(addressesToTrack);
-
-            // Try again after re-tracking
-            const matureUtxos = this.context.getMatureRange(0, this.context.matureLength);
-            const pendingUtxos = this.context.getPending() || [];
-            const allUtxos = [...(matureUtxos || []), ...pendingUtxos];
-
-            if (allUtxos.length > 0) {
-              walletLogger.debug(`📦 Found ${allUtxos.length} UTXOs after re-tracking`);
-              return allUtxos;
-            }
-          }
-        } catch (refreshError) {
-          walletLogger.warn('📦 Failed to refresh UTXO context:', refreshError as Error);
-        }
+      // Add change address
+      if (account.changeAddress) {
+        allAddresses.push(account.changeAddress.toString());
+        walletLogger.debug(`📦 + Change: ${account.changeAddress.toString()}`);
       }
 
-      // Try multiple approaches to get UTXOs
-      try {
-        walletLogger.debug(`📦 Calling accountsGetUtxos for account: ${accountId}`);
-
-        // Get addresses from our cached accounts array first (more reliable)
-        const allAddresses: string[] = [];
-        const account = this.accounts.find((acc) => acc.accountId === accountId);
-
-        if (account) {
-          walletLogger.debug(`📦 Using addresses from cached account`);
-          if (account.receiveAddress) {
-            allAddresses.push(account.receiveAddress.toString());
-          }
-          if (account.changeAddress) {
-            allAddresses.push(account.changeAddress.toString());
-          }
-        } else {
-          // Fallback: Try to get addresses from accountsGet
-          walletLogger.debug(`📦 Getting all addresses for account from WASM wallet: ${accountId}`);
-          const accountResponse = await this.wasmWallet.accountsGet({
-            accountId,
-          });
-
-          if (accountResponse.accountDescriptor) {
-            // Add receive address
-            if (accountResponse.accountDescriptor.receiveAddress) {
-              allAddresses.push(accountResponse.accountDescriptor.receiveAddress.toString());
+      // Add all addresses from addresses array (derived addresses!)
+      if (account.addresses && Array.isArray(account.addresses)) {
+        for (const addr of account.addresses) {
+          try {
+            const addrString = addr.toString();
+            // Validate that address has proper prefix (kaspa: or kaspatest:)
+            if (addrString.includes(':')) {
+              allAddresses.push(addrString);
+              walletLogger.debug(`📦 + Derived address: ${addrString}`);
+            } else {
+              walletLogger.warn(`📦 ⚠️ Skipping address without prefix: ${addrString}`);
             }
-            // Add change address if available
-            if (accountResponse.accountDescriptor.changeAddress) {
-              allAddresses.push(accountResponse.accountDescriptor.changeAddress.toString());
-            }
+          } catch (err) {
+            walletLogger.warn(`📦 ⚠️ Failed to convert address:`, err as Error);
           }
         }
+        walletLogger.debug(`📦 Added ${account.addresses.length} addresses from addresses[] array`);
+      }
 
-        walletLogger.debug(`📦 Found ${allAddresses.length} addresses for account:`, allAddresses);
-
-        // Approach 2: Try with all addresses
-        const utxosResponse = await this.wasmWallet.accountsGetUtxos({
-          accountId,
-          addresses: allAddresses,
-        });
-
-        walletLogger.debug(`📦 accountsGetUtxos response:`, {
-          utxosCount: utxosResponse.utxos?.length || 0,
-          hasUtxos: !!utxosResponse.utxos,
-          utxosType: typeof utxosResponse.utxos,
-        });
-
-        // If we got UTXOs, return them
-        if (utxosResponse.utxos && utxosResponse.utxos.length > 0) {
-          walletLogger.debug(`📦 Found ${utxosResponse.utxos.length} UTXOs from wallet state`);
-
-          // Debug: Log the actual UTXO details
-
-          // ✅ CRITICAL FIX: Convert string amounts to bigint for WASM SDK compatibility
-          // accountsGetUtxos returns string values, but createTransactions needs bigint
-          const utxosWithBigint = utxosResponse.utxos.map((utxo) => ({
-            ...utxo,
-            amount: typeof utxo.amount === 'string' ? BigInt(utxo.amount) : utxo.amount,
-            blockDaaScore:
-              typeof utxo.blockDaaScore === 'string'
-                ? BigInt(utxo.blockDaaScore)
-                : utxo.blockDaaScore,
-          }));
-
-          return utxosWithBigint as UtxoEntry[];
-        }
-
-        // Approach 3: Try with just the receive address as fallback
-        walletLogger.debug(
-          `📦 No UTXOs found with all addresses, trying with receive address only: ${address}`
-        );
-        const utxosResponseWithAddress = await this.wasmWallet.accountsGetUtxos({
-          accountId,
-          addresses: [address],
-        });
-
-        walletLogger.debug(`accountsGetUtxos with address response`, {
-          utxosCount: utxosResponseWithAddress.utxos?.length || 0,
-          hasUtxos: !!utxosResponseWithAddress.utxos,
-        });
-
-        if (utxosResponseWithAddress.utxos && utxosResponseWithAddress.utxos.length > 0) {
-          walletLogger.debug(
-            `📦 Found ${utxosResponseWithAddress.utxos.length} UTXOs with address filter`
-          );
-
-          // ✅ CRITICAL FIX: Convert string amounts to bigint for WASM SDK compatibility
-          // accountsGetUtxos returns string values, but createTransactions needs bigint
-          const utxosWithBigint = utxosResponseWithAddress.utxos.map((utxo) => ({
-            ...utxo,
-            amount: typeof utxo.amount === 'string' ? BigInt(utxo.amount) : utxo.amount,
-            blockDaaScore:
-              typeof utxo.blockDaaScore === 'string'
-                ? BigInt(utxo.blockDaaScore)
-                : utxo.blockDaaScore,
-          }));
-
-          return utxosWithBigint as UtxoEntry[];
-        }
-
-        walletLogger.debug('📦 No UTXOs found with any approach');
-        walletLogger.debug(
-          '💡 Tip: If wallet has a balance but no UTXOs, try calling waitForUtxos() to wait for discovery'
-        );
-        return [];
-      } catch (walletError) {
-        walletLogger.warn('Failed to get UTXOs from wallet state', walletError as Error);
+      if (allAddresses.length === 0) {
+        walletLogger.warn(`📦 No addresses found for account ${accountShortId}`);
         return [];
       }
+
+      walletLogger.debug(
+        `📦 Querying UTXOs for ${allAddresses.length} addresses (account ${accountShortId})`
+      );
+
+      // Query UTXOs for ALL addresses of this account
+      const utxosResponse = await this.wasmWallet.accountsGetUtxos({
+        accountId,
+        addresses: allAddresses,
+      });
+
+      if (utxosResponse.utxos && utxosResponse.utxos.length > 0) {
+        walletLogger.debug(`✅ Found ${utxosResponse.utxos.length} UTXOs`);
+
+        // Convert string amounts to BigInt (WASM SDK sometimes returns strings, but we need BigInt)
+        // Mutate the UTXO objects directly since they are WASM objects with setters
+        for (const utxo of utxosResponse.utxos) {
+          if (typeof utxo.amount === 'string') {
+            utxo.amount = BigInt(utxo.amount);
+          }
+          if (typeof utxo.blockDaaScore === 'string') {
+            utxo.blockDaaScore = BigInt(utxo.blockDaaScore);
+          }
+        }
+
+        walletLogger.debug(`📦 Ensured ${utxosResponse.utxos.length} UTXOs have BigInt amounts`);
+
+        return utxosResponse.utxos;
+      }
+
+      walletLogger.debug('📦 No UTXOs found');
+      return [];
     } catch (error) {
-      walletLogger.error('❌ Failed to get UTXOs:', error as Error);
-      // If all else fails, return empty array
-      walletLogger.debug('📦 No UTXOs found from any source');
+      walletLogger.error('❌ Failed to get UTXOs', error as Error);
       return [];
     }
   }
