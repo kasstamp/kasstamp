@@ -6,6 +6,6 @@
     // Skip type checking for WASM bindings to avoid $1 conflicts
     "skipLibCheck": true
   },
-  "include": ["src/**/*"],
-  "exclude": ["node_modules", "dist", "**/*.test.ts", "web/**/*", "nodejs/**/*"]
+  "include": ["src/index.ts"],
+  "exclude": ["node_modules", "dist", "**/*.test.ts", "**/__tests__/**/*"]
 }

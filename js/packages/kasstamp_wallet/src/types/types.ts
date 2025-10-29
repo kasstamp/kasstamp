@@ -1,13 +1,4 @@
-import type {
-  IAccountDescriptor,
-  ITransactionRecord,
-  IWalletDescriptor,
-  IWalletExportResponse,
-  PendingTransaction,
-  UtxoEntry,
-  Wallet as WasmWallet,
-} from '@kasstamp/kaspa_wasm_sdk';
-import type { ISecureSigningEnclave, SignOptions } from '../signing';
+import type { ITransactionRecord, IWalletDescriptor } from '@kasstamp/kaspa_wasm_sdk';
 
 /**
  * Supported Kaspa networks
@@ -48,67 +39,6 @@ export interface TransactionMonitor {
   on(event: string, callback: (...args: unknown[]) => void): void;
 
   off(event: string, callback: (...args: unknown[]) => void): void;
-}
-
-/**
- * Simplified wallet interface that delegates to WASM SDK
- */
-export interface SimpleWallet {
-  readonly wasmWallet: WasmWallet;
-  readonly network: string;
-  accounts: IAccountDescriptor[];
-  locked: boolean;
-  readonly descriptor?: IWalletDescriptor;
-
-  readonly signingEnclave: ISecureSigningEnclave;
-
-  deriveNextAccount(change?: 0 | 1): Promise<IAccountDescriptor>;
-
-  getExistingAccounts(): Promise<IAccountDescriptor[]>;
-
-  getAccountByAddress(address: string): IAccountDescriptor | undefined;
-
-  lock(): void;
-
-  unlockFromPassword(password: string): Promise<void>;
-
-  toEncryptedKeystore(
-    password: string,
-    meta?: Record<string, unknown>
-  ): Promise<IWalletExportResponse>;
-
-  getBalance(accountId: string): Promise<bigint>;
-
-  sendTransaction(request: {
-    accountId: string;
-    walletSecret: string;
-    destination: Array<{ address: string; amount: bigint }>;
-    priorityFeeSompi?: { amount: bigint; source: number };
-  }): Promise<{ transactionIds: string[] }>;
-
-  // ✅ NEW: Sign transaction using secure enclave (fast transaction chaining)
-  signTransaction(transaction: PendingTransaction, options?: SignOptions): Promise<void>;
-
-  getTransactionHistory(
-    accountId: string,
-    options?: TransactionHistoryOptions
-  ): Promise<ITransactionRecord[]>;
-
-  getTransactionCount(accountId: string): Promise<number>;
-
-  getUtxos(accountId: string): Promise<UtxoEntry[]>;
-
-  isSynced(): boolean;
-
-  waitForSync(timeoutMs?: number): Promise<boolean>;
-
-  onTransactionUpdate(callback: (event: TransactionEvent) => void): void;
-
-  onBalanceUpdate(callback: (event: BalanceEvent) => void): void;
-
-  removeTransactionListener(callback: (event: TransactionEvent) => void): void;
-
-  removeBalanceListener(callback: (event: BalanceEvent) => void): void;
 }
 
 /**

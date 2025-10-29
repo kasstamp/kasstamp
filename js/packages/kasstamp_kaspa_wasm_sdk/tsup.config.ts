@@ -1,9 +1,8 @@
 import { defineConfig } from 'tsup';
 
 export default defineConfig({
-  // Inherit from root config but add WASM-specific configurations
-  entry: ['src/index.ts', 'src/platform.ts'],
-  format: ['esm', 'cjs'],
+  entry: ['src/index.ts'],
+  format: ['esm'],
   dts: false,
   clean: true,
   splitting: false,
@@ -15,6 +14,7 @@ export default defineConfig({
   outDir: 'dist',
   shims: true,
   platform: 'neutral',
+  keepNames: true,
 
   // Keep these external as they should be provided by the environment
   external: [
@@ -29,17 +29,11 @@ export default defineConfig({
     /^kaspa\//,
   ],
 
-  // Define globals for browser builds
   define: {
     'process.env.NODE_ENV': JSON.stringify(process.env.NODE_ENV || 'development'),
   },
 
-  // Ensure compatibility
-  keepNames: true,
-
-  // WASM-specific: Suppress esbuild warnings for generated kaspa.js files
-  esbuildOptions: (options) => {
-    // Suppress duplicate class member warnings from generated WASM files
+  esbuildOptions(options) {
     options.logOverride = {
       'duplicate-class-member': 'silent',
     };

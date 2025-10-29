@@ -73,7 +73,6 @@ const stampLogger = createLogger('kasstamp:stamping:file');
  * @param artifactProcessingResults - Array of processed artifacts with their processing results
  * @param wallet - Wallet containing the mnemonic for signing
  * @param options - Stamping options
- * @param getNetwork - Function to get network ID
  * @param priorityFee - Fee in Sompi to use for priority
  * @returns Array of stamping results, one for each artifact
  */
@@ -90,7 +89,6 @@ export async function stampFiles(
   }>,
   wallet: SimpleWallet,
   options: StampOptions,
-  getNetwork: () => string,
   priorityFee: bigint
 ): Promise<StampingResult[]> {
   const startTime = Date.now();
@@ -100,81 +98,164 @@ export async function stampFiles(
     artifactCount: artifactProcessingResults.length,
   });
 
-  // Get account and address information
-  const accounts = wallet.accounts;
-  if (!accounts || accounts.length === 0) {
-    throw new Error('No accounts available in wallet');
-  }
-  const accountId = accounts[0].accountId;
-  const receiveAddress = accounts[0].receiveAddress?.toString();
-  const changeAddress = accounts[0].changeAddress?.toString();
+  // CRITICAL: Get deterministic primary addresses (index 0) instead of trusting account descriptor
+  // The account descriptor's addresses may change dynamically, but primary addresses are always consistent
+  const primaryAddresses = await wallet.getPrimaryAddresses();
+  const receiveAddress = primaryAddresses.receiveAddress;
+  const changeAddress = primaryAddresses.changeAddress;
 
-  if (!receiveAddress || !changeAddress) {
-    throw new Error('No receive or change address available');
-  }
+  batchLogger.debug('Account addresses for stamping', {
+    receiveAddress,
+    changeAddress,
+    note: 'Using deterministic primary addresses (index 0) instead of account descriptor. All change outputs will go to the main changeAddress.',
+  });
 
-  // Get initial mature UTXO for starting the chain
-  const utxos = await wallet.getUtxos(accountId);
+  // Get mature UTXOs (already sorted desc by amount by the wallet)
+  const utxos = await wallet.getUtxos();
   if (!utxos || utxos.length === 0) {
-    throw new Error('No UTXOs available for stamping');
-  }
-
-  // Debug: Log first UTXO properties to understand structure
-  if (utxos.length > 0) {
-    const firstUtxo = utxos[0];
-    batchLogger.debug('UTXO properties', {
-      keys: Object.keys(firstUtxo),
-      blockDaaScore: firstUtxo.blockDaaScore.toString(),
-      isCoinbase: firstUtxo.isCoinbase,
-      amount: firstUtxo.amount.toString(),
-    });
-  }
-
-  // All UTXOs are considered mature for stamping purposes
-  // In Kaspa, UTXOs become spendable after they're confirmed
-  const matureUtxos = utxos;
-
-  if (matureUtxos.length === 0) {
-    throw new Error('No mature UTXOs available. Please wait for pending transactions to confirm.');
+    throw new Error('No mature UTXOs available for stamping');
   }
 
   batchLogger.info('Starting batched stamping', {
-    matureUtxoCount: matureUtxos.length,
+    matureUtxoCount: utxos.length,
   });
   batchLogger.info('Using FAST transaction chaining - no confirmation waits');
 
-  // Select the largest mature UTXO (same logic as single file stamping)
-  const sortedUtxos = [...matureUtxos].sort((a, b) => Number(b.amount - a.amount));
-  const largestUtxo = sortedUtxos[0];
+  // CRITICAL: Capture ORIGINAL UTXO addresses BEFORE any normalization happens
+  // The UTXO addresses may be normalized later (for change routing), but we need the original
+  // addresses for signing because transaction.addresses() uses the script public key, not the address field
+  const originalUtxoAddresses = new Set<string>();
+  for (const utxo of utxos) {
+    const addr = utxo.address?.toString();
+    if (addr) {
+      originalUtxoAddresses.add(addr);
+    }
+  }
+
+  // Track which addresses were used (for cleanup after spending)
+  const addressesUsedInTransaction = new Set<string>(originalUtxoAddresses);
+
+  // Select the largest mature UTXO (first entry due to sorting)
+  const largestUtxo = utxos[0];
+  const utxoAddress = largestUtxo.address?.toString() || 'unknown';
 
   batchLogger.info('Using largest UTXO for batched stamping chain', {
     utxoValueKAS: (Number(largestUtxo.amount) / 1e8).toFixed(2),
+    utxoAddress,
+    accountChangeAddress: changeAddress,
+    utxoAddressMatchesChangeAddress: utxoAddress === changeAddress,
+    note:
+      utxoAddress !== changeAddress
+        ? '⚠️ UTXO address differs from account changeAddress - change will be normalized to use account changeAddress'
+        : '✅ UTXO address matches account changeAddress',
   });
 
   // Create signing function using wallet's secure enclave (same as single file stamping)
   batchLogger.debug('Creating secure signing function from enclave');
 
-  // Check if enclave is unlocked
-  if (!wallet.signingEnclave) {
-    throw new Error('Wallet does not have a signing enclave');
-  }
-
   if (wallet.signingEnclave.isLocked()) {
     throw new Error('Signing enclave is locked. Please unlock your wallet first.');
   }
 
-  if (!wallet.signingEnclave.hasMnemonic()) {
-    throw new Error(
-      'Signing enclave has no mnemonic stored. Please unlock your wallet with your recovery phrase.'
-    );
-  }
-
   // Create signing function that uses the enclave
+  // Pass the address derivation map for efficient key lookup (no scanning needed!)
   const signingFunction = async (transaction: PendingTransaction) => {
+    // Get addresses that need signing from the transaction
+    // This uses the script public keys, so it returns the ACTUAL addresses that need signing
+    let requiredAddresses: string[];
+    try {
+      requiredAddresses = transaction.addresses();
+      batchLogger.debug('Transaction requires signatures for addresses:', requiredAddresses);
+    } catch (error) {
+      batchLogger.warn(
+        'Could not get transaction addresses, using original UTXO addresses',
+        error as Error
+      );
+      // Fallback to original UTXO addresses if transaction.addresses() fails
+      requiredAddresses = Array.from(originalUtxoAddresses);
+    }
+
+    // Get address derivation map from wallet for efficient signing
+    // This allows direct key derivation instead of scanning 0-500 indices
+    const addressDerivationMap = new Map<
+      string,
+      { accountIndex: number; addressIndex: number; isReceive: boolean }
+    >();
+
+    // CRITICAL: Always include primary addresses in the derivation map
+    // These are the most commonly used addresses (receive[0] and change[0])
+    const primaryAddresses = await wallet.getPrimaryAddresses();
+    const receiveDerivation = wallet.getAddressDerivation(primaryAddresses.receiveAddress);
+    const changeDerivation = wallet.getAddressDerivation(primaryAddresses.changeAddress);
+
+    // Primary addresses are always at index 0, so if not found in map, derive them directly
+    if (receiveDerivation) {
+      addressDerivationMap.set(primaryAddresses.receiveAddress, receiveDerivation);
+    } else {
+      // Fallback: primary receive address is always at index 0
+      addressDerivationMap.set(primaryAddresses.receiveAddress, {
+        accountIndex: 0,
+        addressIndex: 0,
+        isReceive: true,
+      });
+    }
+    if (changeDerivation) {
+      addressDerivationMap.set(primaryAddresses.changeAddress, changeDerivation);
+    } else {
+      // Fallback: primary change address is always at index 0
+      addressDerivationMap.set(primaryAddresses.changeAddress, {
+        accountIndex: 0,
+        addressIndex: 0,
+        isReceive: false,
+      });
+    }
+
+    // CRITICAL: Include ORIGINAL UTXO addresses in the derivation map
+    // These are the addresses that actually need signing (from script public keys)
+    for (const originalAddr of originalUtxoAddresses) {
+      const derivation = wallet.getAddressDerivation(originalAddr);
+      if (derivation) {
+        addressDerivationMap.set(originalAddr, derivation);
+      }
+    }
+
+    // CRITICAL: Also ensure all required addresses from transaction are in the map
+    // This handles cases where transaction.addresses() returns addresses we didn't expect
+    for (const requiredAddr of requiredAddresses) {
+      if (!addressDerivationMap.has(requiredAddr)) {
+        const derivation = wallet.getAddressDerivation(requiredAddr);
+        if (derivation) {
+          addressDerivationMap.set(requiredAddr, derivation);
+          batchLogger.debug('Added required address to derivation map', {
+            address: requiredAddr,
+            derivation,
+          });
+        } else {
+          batchLogger.warn(
+            'Required address not found in wallet derivation map and no derivation available',
+            {
+              address: requiredAddr,
+              note: 'Will fall back to scanning',
+            }
+          );
+        }
+      }
+    }
+
+    batchLogger.debug('Address derivation map prepared for signing', {
+      mapSize: addressDerivationMap.size,
+      addresses: Array.from(addressDerivationMap.keys()),
+      originalUtxoAddresses: Array.from(originalUtxoAddresses),
+      requiredAddresses,
+      allRequiredInMap: requiredAddresses.every((addr) => addressDerivationMap.has(addr)),
+      note: 'Includes primary addresses, original UTXO addresses, and any addresses required by the transaction',
+    });
+
     await wallet.signingEnclave!.signWithAutoDiscovery(
       transaction,
       wallet.network,
-      0 // accountIndex
+      0, // accountIndex
+      addressDerivationMap.size > 0 ? addressDerivationMap : undefined
     );
   };
 
@@ -277,7 +358,7 @@ export async function stampFiles(
     throw new Error('RPC client not available');
   }
 
-  const networkId = getNetwork();
+  const networkId = wallet.network;
 
   const utxoValueKAS = Number(largestUtxo.amount) / 1e8;
   batchLogger.info('Starting batched transaction chain', {
@@ -421,6 +502,23 @@ export async function stampFiles(
       transactionCount: artifactTransactionIds.length,
       costKAS: totalCost.toFixed(6),
     });
+  }
+
+  // Cleanup: After spending UTXOs from derived addresses, unregister those addresses
+  // if they no longer have any UTXOs. Primary addresses are never unregistered.
+  const addressesToCheckForCleanup = Array.from(addressesUsedInTransaction).filter(
+    (addr) => addr !== receiveAddress && addr !== changeAddress
+  );
+
+  if (addressesToCheckForCleanup.length > 0) {
+    batchLogger.debug('Checking derived addresses for cleanup after transaction', {
+      addressesToCheck: addressesToCheckForCleanup,
+    });
+
+    // Wait a bit for the UTXO context to update after transaction submission
+    await new Promise((resolve) => setTimeout(resolve, 2000));
+
+    await wallet.cleanupEmptyAddresses(addressesToCheckForCleanup);
   }
 
   return results;

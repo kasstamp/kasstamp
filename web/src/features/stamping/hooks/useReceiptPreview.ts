@@ -61,11 +61,11 @@ export function useReceiptPreview() {
         if (!wallet) {
           throw new Error('Wallet required to load preview of private receipt');
         }
-        if (wallet.locked) {
+        if (wallet.signingEnclave.isLocked()) {
           throw new Error('Wallet is locked. Please unlock your wallet to load the preview.');
         }
         pageLogger.debug('Wallet status:', {
-          locked: wallet.locked,
+          locked: wallet.signingEnclave.isLocked(),
           hasEnclave: !!wallet.signingEnclave,
           enclaveLocked: wallet.signingEnclave?.isLocked(),
         });
@@ -122,11 +122,11 @@ export function useReceiptPreview() {
         if (!wallet) {
           throw new Error('Wallet required to load preview of private receipt');
         }
-        if (wallet.locked) {
+        if (wallet.signingEnclave.isLocked()) {
           throw new Error('Wallet is locked. Please unlock your wallet to load the preview.');
         }
         pageLogger.debug('Wallet status:', {
-          locked: wallet.locked,
+          locked: wallet.signingEnclave.isLocked(),
           hasEnclave: !!wallet.signingEnclave,
           enclaveLocked: wallet.signingEnclave?.isLocked(),
         });

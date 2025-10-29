@@ -1,4 +1,5 @@
 import type { PayloadDebugInfo } from '@kasstamp/tx';
+import { NetworkId } from '@kasstamp/kaspa_wasm_sdk/kaspa.js';
 
 export type StampingMode = 'public' | 'private';
 
@@ -37,7 +38,7 @@ export interface StampingReceipt {
 
   // Cost & network
   totalCostKAS: number;
-  network?: string;
+  network?: NetworkId;
   walletAddress?: string;
 }
 
@@ -171,7 +172,7 @@ export interface StampingResult {
 
     // Cost & network
     totalCostKAS: number;
-    network: string;
+    network: NetworkId;
     walletAddress: string;
   };
   debugInfo?: {
