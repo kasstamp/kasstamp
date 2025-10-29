@@ -1,6 +1,6 @@
 {
   "name": "@kasstamp/chunking",
-  "version": "0.0.8",
+  "version": "0.0.9",
   "description": "File chunking utilities for Kasstamp",
   "type": "module",
   "main": "dist/index.js",
