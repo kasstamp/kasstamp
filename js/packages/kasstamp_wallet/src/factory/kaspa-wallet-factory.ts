@@ -315,6 +315,26 @@ export class KaspaWalletFactory implements WalletFactory {
     await wallet.unlockFromPassword(options.walletSecret);
     importLogger.debug('Wallet unlocked', { locked: wallet.locked });
 
+    // Trigger address discovery automatically via getUtxos() if needed
+    // getUtxos() will check balance and only run discovery if balance > 0 but no UTXOs found
+    if (wallet.accounts.length > 0) {
+      const accountId = wallet.accounts[0].accountId;
+      importLogger.info(
+        '🔍 Checking for UTXOs (will auto-discover addresses if balance exists but no UTXOs found)...'
+      );
+
+      try {
+        // This will automatically trigger address discovery if:
+        // - Balance > 0
+        // - No UTXOs found on known addresses
+        await wallet.getUtxos(accountId);
+        importLogger.info('✅ UTXO check completed (auto-discovery handled if needed)');
+      } catch (utxoError) {
+        importLogger.warn('⚠️ UTXO check failed (non-critical):', utxoError as Error);
+        // Don't fail wallet import if UTXO check fails
+      }
+    }
+
     importLogger.info('Wallet imported', { accountCount: wallet.accounts.length });
 
     return wallet;
