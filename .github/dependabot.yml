@@ -1,7 +1,7 @@
 # Dependabot configuration for KasStamp
 version: 2
 updates:
-  # JavaScript packages
+  # JS Core / SDK
   - package-ecosystem: "npm"
     directory: "/js"
     schedule:
@@ -14,31 +14,13 @@ updates:
     assignees:
       - "kasstamp"
     commit-message:
-      prefix: "chore"
-      include: "scope"
+      prefix: "chore(js)"
+      prefix-development: "chore(js)"
     labels:
       - "dependencies"
-      - "javascript"
-    groups:
-      dev-dependencies:
-        patterns:
-          - "@types/*"
-          - "eslint*"
-          - "jest*"
-          - "typescript"
-          - "babel*"
-        update-types:
-          - "minor"
-          - "patch"
-      crypto-dependencies:
-        patterns:
-          - "@noble/*"
-          - "@scure/*"
-        update-types:
-          - "minor"
-          - "patch"
+      - "js"
 
-  # Web package
+  # Web Frontend
   - package-ecosystem: "npm"
     directory: "/web"
     schedule:
@@ -51,27 +33,27 @@ updates:
     assignees:
       - "kasstamp"
     commit-message:
-      prefix: "chore"
-      include: "scope"
+      prefix: "chore(web)"
+      prefix-development: "chore(web)"
     labels:
       - "dependencies"
       - "web"
-    groups:
-      dev-dependencies:
-        patterns:
-          - "vite*"
-          - "vitest*"
-          - "@types/*"
-          - "eslint*"
-          - "typescript"
-        update-types:
-          - "minor"
-          - "patch"
-      ui-dependencies:
-        patterns:
-          - "react*"
-          - "@radix-ui/*"
-          - "tailwindcss"
-        update-types:
-          - "minor"
-          - "patch"
+
+  # Root / Global Tooling
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+    open-pull-requests-limit: 10
+    reviewers:
+      - "kasstamp"
+    assignees:
+      - "kasstamp"
+    commit-message:
+      prefix: "chore(global)"
+      prefix-development: "chore(global)"
+    labels:
+      - "dependencies"
+      - "global"
