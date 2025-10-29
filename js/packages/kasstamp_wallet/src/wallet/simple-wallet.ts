@@ -7,12 +7,10 @@ import type {
   IWalletDescriptor,
   IWalletExportResponse,
   PendingTransaction,
-  UtxoContext,
   UtxoEntry,
-  UtxoProcessor,
   Wallet as WasmWallet,
 } from '@kasstamp/kaspa_wasm_sdk';
-import { getUtxoContext, getUtxoProcessor, NetworkId } from '@kasstamp/kaspa_wasm_sdk';
+import { NetworkId } from '@kasstamp/kaspa_wasm_sdk';
 import type {
   BalanceEvent,
   SimpleWallet,
@@ -22,6 +20,7 @@ import type {
 } from '../types';
 import type { IEnclaveStorage, ISecureSigningEnclave, SignOptions } from '../signing';
 import { createSigningEnclave } from '../signing';
+import { AddressDiscoveryService } from './address-generator';
 
 const walletLogger = createLogger('kasstamp:wallet:simple');
 
@@ -35,16 +34,18 @@ export class SimpleWalletImpl implements SimpleWallet {
   public locked: boolean = true;
   public readonly descriptor?: IWalletDescriptor;
 
-  // ✅ NEW: Secure signing enclave (replaces unsafe mnemonic/walletSecret)
+  // Secure signing enclave (replaces unsafe mnemonic/walletSecret)
   public readonly signingEnclave: ISecureSigningEnclave;
 
-  // UTXO management
-  private processor?: UtxoProcessor;
-  private context?: UtxoContext;
+  // Address discovery service (lazy initialized per account)
+  private discoveryServices: Map<string, AddressDiscoveryService> = new Map();
 
   private transactionMonitors: Map<string, TransactionMonitor> = new Map();
   private transactionListeners: Set<(event: TransactionEvent) => void> = new Set();
   private balanceListeners: Set<(event: BalanceEvent) => void> = new Set();
+
+  // Recursion protection for getUtxos() when discovery is triggered
+  private getUtxosRecursionDepth: Map<string, number> = new Map();
 
   constructor(wasmWallet: WasmWallet, network: string, descriptor?: IWalletDescriptor) {
     this.wasmWallet = wasmWallet;
@@ -79,74 +80,10 @@ export class SimpleWalletImpl implements SimpleWallet {
         const response = await this.wasmWallet.accountsEnumerate({});
         this.accounts = response.accountDescriptors || [];
         walletLogger.debug(`✅ Loaded ${this.accounts.length} existing accounts`);
-
-        // Initialize UTXO processor and context (like Kasia does)
-        await this.initializeUtxoProcessor();
       } catch (error) {
         walletLogger.error('❌ Failed to load existing accounts:', error as Error);
         // Don't throw here, just log the error
       }
-    }
-  }
-
-  /**
-   * Initialize UTXO processor and context (like Kasia does)
-   */
-  private async initializeUtxoProcessor(): Promise<void> {
-    try {
-      walletLogger.debug('📦 Initializing UTXO processor and context...');
-
-      // Get the RPC client from the WASM wallet
-      // Note: rpc is not in the official WasmWallet type, but exists at runtime
-      const rpcClient = (this.wasmWallet as WasmWallet & { rpc?: unknown }).rpc;
-      if (!rpcClient) {
-        walletLogger.warn('⚠️ No RPC client available for UTXO processor');
-        return;
-      }
-
-      // Get UtxoProcessor and UtxoContext classes
-      const UtxoProcessor = await getUtxoProcessor();
-      const UtxoContext = await getUtxoContext();
-
-      // Create UtxoProcessor (like Kasia does)
-      this.processor = new UtxoProcessor({
-        networkId: this.network,
-        rpc: rpcClient,
-      });
-
-      // Create UtxoContext (like Kasia does)
-      this.context = new UtxoContext({ processor: this.processor });
-
-      // Start the processor (like Kasia does)
-      await this.processor.start();
-
-      // Track addresses for UTXO discovery (like Kasia does)
-      if (this.accounts.length > 0) {
-        const addressesToTrack: string[] = [];
-
-        // Get all addresses from all accounts (receive + change)
-        for (const account of this.accounts) {
-          if (account.receiveAddress) {
-            addressesToTrack.push(account.receiveAddress.toString());
-          }
-          if (account.changeAddress) {
-            addressesToTrack.push(account.changeAddress.toString());
-          }
-        }
-
-        if (addressesToTrack.length > 0) {
-          walletLogger.debug(
-            `📦 Tracking ${addressesToTrack.length} addresses for UTXO discovery:`,
-            addressesToTrack
-          );
-          await this.context.trackAddresses(addressesToTrack);
-          walletLogger.debug('✅ Addresses tracked for UTXO discovery');
-        }
-      }
-
-      walletLogger.debug('✅ UTXO processor and context initialized');
-    } catch (error) {
-      walletLogger.error('❌ Failed to initialize UTXO processor:', error as Error);
     }
   }
 
@@ -334,8 +271,34 @@ export class SimpleWalletImpl implements SimpleWallet {
         throw new Error('Account not found');
       }
 
-      const balance = response.accountDescriptor.balance || 0n;
-      walletLogger.debug(`💰 Balance: ${balance.toString()} sompi`);
+      // Handle both object format (mature/pending) and primitive format
+      let balance: bigint;
+      const balanceValue = response.accountDescriptor.balance;
+
+      if (balanceValue === undefined || balanceValue === null) {
+        balance = 0n;
+      } else if (
+        typeof balanceValue === 'object' &&
+        ('mature' in balanceValue || 'pending' in balanceValue)
+      ) {
+        // Balance is an object with mature/pending properties
+        const balanceObj = balanceValue as {
+          mature?: bigint | number | string;
+          pending?: bigint | number | string;
+        };
+        const mature = BigInt(balanceObj.mature || 0);
+        const pending = BigInt(balanceObj.pending || 0);
+        balance = mature + pending;
+        walletLogger.debug(`💰 Balance (mature + pending): ${balance.toString()} sompi`, {
+          mature: mature.toString(),
+          pending: pending.toString(),
+        });
+      } else {
+        // Balance is a primitive (bigint, number, or string)
+        balance = BigInt(balanceValue || 0);
+        walletLogger.debug(`💰 Balance: ${balance.toString()} sompi`);
+      }
+
       return balance;
     } catch (error) {
       walletLogger.error('❌ Failed to get balance:', error as Error);
@@ -445,6 +408,62 @@ export class SimpleWalletImpl implements SimpleWallet {
    * This method collects ALL addresses from the specified account (receive, change, and derived)
    * and queries UTXOs for all of them. This ensures we find UTXOs on any derived address.
    *
+   * ## Recursive Address Discovery Pattern
+   *
+   * This method uses a **recursive discovery pattern** to automatically find UTXOs on addresses
+   * that haven't been generated yet. Here's how it works:
+   *
+   * ### The Problem
+   * When a wallet has a balance but UTXOs are not found on the initially known addresses,
+   * the UTXOs might be on addresses that haven't been derived yet. Traditional wallets require
+   * manual address discovery, but we automate this process.
+   *
+   * ### The Solution: Recursive Discovery
+   * 1. **First call**: Query UTXOs for all currently known addresses
+   *    - If UTXOs found → return immediately
+   *    - If no UTXOs but balance > 0 → trigger address discovery
+   *
+   * 2. **Address Discovery**: Generate new addresses (20 receive + 20 change)
+   *    - The discovery service is a pure address generator with no UTXO logic
+   *    - Simply creates addresses and returns them
+   *
+   * 3. **Recursive call**: After generating addresses, recursively call `getUtxos()` again
+   *    - The new addresses are now in the wallet's internal address list
+   *    - The recursive call will query UTXOs for ALL addresses (including newly generated ones)
+   *    - If UTXOs are found → return them
+   *    - If still no UTXOs → another recursive discovery round can occur (up to MAX_RECURSION_DEPTH)
+   *
+   * ### Why Recursion Instead of Checking During Discovery?
+   *
+   * **Previous approach (problematic)**:
+   * - Discovery would create addresses, activate account, wait, then check UTXOs
+   * - UTXOs were often not immediately available after activation
+   * - Required complex timing and multiple activation steps
+   * - UTXO checking logic was scattered across discovery and getUtxos
+   *
+   * **Current approach (recursive)**:
+   * - Discovery is pure and simple: just generates addresses
+   * - All UTXO checking logic is centralized in `getUtxos()`
+   * - After address generation, the wallet's internal UTXO tracker automatically includes new addresses
+   * - Recursive call leverages the wallet's built-in address tracking (no explicit activation needed)
+   * - Clean separation of concerns: discovery = address generation, getUtxos = UTXO querying
+   *
+   * ### Recursion Protection
+   * To prevent infinite loops, we track recursion depth per account:
+   * - Maximum depth: 3 recursive calls (initial call + 2 discovery rounds)
+   * - If limit reached, method returns empty array with warning
+   * - Recursion depth is properly decremented on all return paths
+   *
+   * ### Example Flow
+   * ```
+   * getUtxos() [depth 0]
+   *   → No UTXOs found, balance > 0
+   *   → discoverAddresses() generates 20 receive + 20 change addresses
+   *   → getUtxos() [depth 1] - recursively called
+   *     → Queries wallet's internal address list (includes newly generated addresses)
+   *     → UTXOs found! → return UTXOs
+   * ```
+   *
    * @param accountId - The account ID to get UTXOs for
    * @returns Array of all UTXOs from all addresses of this account
    */
@@ -453,59 +472,147 @@ export class SimpleWalletImpl implements SimpleWallet {
       throw new Error('Wallet is locked. Unlock before getting UTXOs.');
     }
 
-    try {
-      walletLogger.debug(`📦 Getting UTXOs for account: ${accountId}`);
+    // Recursion protection - prevent infinite loops
+    const currentDepth = this.getUtxosRecursionDepth.get(accountId) || 0;
+    const MAX_RECURSION_DEPTH = 3; // Allow up to 3 recursive calls (initial + 2 discovery rounds)
 
-      // Find the specific account
-      const account = this.accounts.find((acc) => acc.accountId === accountId);
-      if (!account) {
-        walletLogger.warn(`📦 Account ${accountId} not found`);
+    if (currentDepth >= MAX_RECURSION_DEPTH) {
+      walletLogger.warn(
+        `⚠️ getUtxos recursion limit reached for account ${accountId.slice(0, 8)} (depth: ${currentDepth})`
+      );
+      return [];
+    }
+
+    // Increment recursion depth
+    this.getUtxosRecursionDepth.set(accountId, currentDepth + 1);
+
+    try {
+      walletLogger.debug(
+        `📦 Getting UTXOs for account: ${accountId.slice(0, 8)}... (recursion depth: ${currentDepth})`
+      );
+
+      // Get the current account descriptor from WASM wallet
+      const accountResponse = await this.wasmWallet.accountsGet({
+        accountId,
+      });
+
+      if (!accountResponse.accountDescriptor) {
+        walletLogger.warn(`📦 Account ${accountId.slice(0, 8)} not found`);
         return [];
       }
 
+      const account = accountResponse.accountDescriptor;
+
       // Collect ALL addresses from THIS account (receive, change, AND addresses array)
       const allAddresses: string[] = [];
-      const accountShortId = account.accountId.substring(0, 8);
 
       // Add receive address
       if (account.receiveAddress) {
         allAddresses.push(account.receiveAddress.toString());
-        walletLogger.debug(`📦 + Receive: ${account.receiveAddress.toString()}`);
       }
 
       // Add change address
       if (account.changeAddress) {
         allAddresses.push(account.changeAddress.toString());
-        walletLogger.debug(`📦 + Change: ${account.changeAddress.toString()}`);
       }
 
       // Add all addresses from addresses array (derived addresses!)
       if (account.addresses && Array.isArray(account.addresses)) {
         for (const addr of account.addresses) {
+          if (!addr) {
+            continue;
+          }
+
           try {
             const addrString = addr.toString();
-            // Validate that address has proper prefix (kaspa: or kaspatest:)
-            if (addrString.includes(':')) {
-              allAddresses.push(addrString);
-              walletLogger.debug(`📦 + Derived address: ${addrString}`);
-            } else {
-              walletLogger.warn(`📦 ⚠️ Skipping address without prefix: ${addrString}`);
+            if (addrString && addrString.trim() !== '' && addrString.includes(':')) {
+              if (!allAddresses.includes(addrString)) {
+                allAddresses.push(addrString);
+              }
             }
           } catch (err) {
-            walletLogger.warn(`📦 ⚠️ Failed to convert address:`, err as Error);
+            walletLogger.warn(`⚠️ Failed to process address from addresses array:`, err as Error);
           }
         }
-        walletLogger.debug(`📦 Added ${account.addresses.length} addresses from addresses[] array`);
+
+        if (account.addresses.length > 0) {
+          walletLogger.debug(
+            `📦 Added ${allAddresses.length - (account.receiveAddress ? 1 : 0) - (account.changeAddress ? 1 : 0)} derived addresses from addresses array`
+          );
+        }
       }
 
+      // If no addresses found, check balance first - might need discovery
       if (allAddresses.length === 0) {
-        walletLogger.warn(`📦 No addresses found for account ${accountShortId}`);
+        walletLogger.warn(`📦 No addresses found for account - checking balance for discovery...`);
+
+        // Check balance: if balance > 0 but no addresses, we need discovery
+        try {
+          const balance = await this.getBalance(accountId);
+
+          if (balance > 0n) {
+            walletLogger.info(
+              `🔍 Wallet has balance (${Number(balance) / 1e8} KAS) but no addresses found, starting address discovery...`
+            );
+
+            try {
+              const discoveryService = this.getDiscoveryService(accountId);
+              const discoveryResult = await discoveryService.discoverAddresses();
+
+              walletLogger.info(`✅ Address discovery completed`, {
+                receiveAddresses: discoveryResult.receive.addresses.size,
+                changeAddresses: discoveryResult.change.addresses.size,
+              });
+
+              // After discovery, collect discovered addresses and query UTXOs
+              const discoveredAddresses: string[] = [];
+              for (const address of discoveryResult.receive.addresses.values()) {
+                discoveredAddresses.push(address.toString());
+              }
+              for (const address of discoveryResult.change.addresses.values()) {
+                discoveredAddresses.push(address.toString());
+              }
+
+              if (discoveredAddresses.length > 0) {
+                walletLogger.debug(
+                  `📦 Querying UTXOs for ${discoveredAddresses.length} discovered addresses`
+                );
+                const utxosResponse = await this.wasmWallet.accountsGetUtxos({
+                  accountId,
+                  addresses: discoveredAddresses,
+                });
+
+                if (utxosResponse.utxos && utxosResponse.utxos.length > 0) {
+                  // Convert string amounts to BigInt
+                  for (const utxo of utxosResponse.utxos) {
+                    if (typeof utxo.amount === 'string') {
+                      utxo.amount = BigInt(utxo.amount);
+                    }
+                    if (typeof utxo.blockDaaScore === 'string') {
+                      utxo.blockDaaScore = BigInt(utxo.blockDaaScore);
+                    }
+                  }
+
+                  walletLogger.debug(
+                    `✅ Found ${utxosResponse.utxos.length} UTXOs after discovery`
+                  );
+                  return utxosResponse.utxos;
+                }
+              }
+            } catch (discoveryError) {
+              walletLogger.warn(`⚠️ Address discovery failed:`, discoveryError as Error);
+            }
+          } else {
+            walletLogger.debug(`📦 Wallet has no balance, no discovery needed`);
+          }
+        } catch (balanceError) {
+          walletLogger.warn(`⚠️ Failed to check balance:`, balanceError as Error);
+        }
+
         return [];
       }
 
-      walletLogger.debug(
-        `📦 Querying UTXOs for ${allAddresses.length} addresses (account ${accountShortId})`
-      );
+      walletLogger.debug(`📦 Querying UTXOs for ${allAddresses.length} addresses`);
 
       // Query UTXOs for ALL addresses of this account
       const utxosResponse = await this.wasmWallet.accountsGetUtxos({
@@ -514,10 +621,7 @@ export class SimpleWalletImpl implements SimpleWallet {
       });
 
       if (utxosResponse.utxos && utxosResponse.utxos.length > 0) {
-        walletLogger.debug(`✅ Found ${utxosResponse.utxos.length} UTXOs`);
-
-        // Convert string amounts to BigInt (WASM SDK sometimes returns strings, but we need BigInt)
-        // Mutate the UTXO objects directly since they are WASM objects with setters
+        // Convert string amounts to BigInt (WASM SDK sometimes returns strings)
         for (const utxo of utxosResponse.utxos) {
           if (typeof utxo.amount === 'string') {
             utxo.amount = BigInt(utxo.amount);
@@ -527,17 +631,87 @@ export class SimpleWalletImpl implements SimpleWallet {
           }
         }
 
-        walletLogger.debug(`📦 Ensured ${utxosResponse.utxos.length} UTXOs have BigInt amounts`);
-
+        walletLogger.debug(`✅ Found ${utxosResponse.utxos.length} UTXOs`);
+        // Decrement recursion depth before returning
+        this.getUtxosRecursionDepth.set(accountId, currentDepth);
         return utxosResponse.utxos;
       }
 
-      walletLogger.debug('📦 No UTXOs found');
+      // No UTXOs found - check balance to decide if we should trigger discovery
+      // Only trigger discovery if wallet has balance > 0 but no UTXOs found
+      try {
+        const balance = await this.getBalance(accountId);
+
+        if (balance > 0n) {
+          walletLogger.info(
+            `🔍 Wallet has balance (${Number(balance) / 1e8} KAS) but no UTXOs found, starting address discovery...`
+          );
+
+          try {
+            const discoveryService = this.getDiscoveryService(accountId);
+
+            // Generate addresses (simple batch of 20 receive + 20 change)
+            // No UTXO checking in discovery - that's done recursively via getUtxos
+            const discoveryResult = await discoveryService.discoverAddresses();
+
+            walletLogger.info(`✅ Address generation completed`, {
+              receiveAddresses: discoveryResult.receive.addresses.size,
+              changeAddresses: discoveryResult.change.addresses.size,
+            });
+
+            // ✅ RECURSIVE CALL: After generating addresses, recursively call getUtxos
+            // This will find UTXOs on the newly generated addresses
+            // Recursion depth is protected by MAX_RECURSION_DEPTH
+            walletLogger.debug(`🔄 Recursively calling getUtxos after address generation...`);
+            const recursiveUtxos = await this.getUtxos(accountId);
+
+            if (recursiveUtxos.length > 0) {
+              walletLogger.debug(
+                `✅ Found ${recursiveUtxos.length} UTXOs via recursive getUtxos call`
+              );
+              // Decrement recursion depth before returning
+              this.getUtxosRecursionDepth.set(accountId, currentDepth);
+              return recursiveUtxos;
+            }
+
+            if (balance > 0n) {
+              walletLogger.warn(
+                `⚠️ Address generation completed but still no UTXOs found despite balance > 0. Balance may be pending or UTXOs may be on addresses beyond scan range.`
+              );
+            }
+          } catch (discoveryError) {
+            walletLogger.warn(`⚠️ Address discovery failed:`, discoveryError as Error);
+          }
+        }
+      } catch (balanceError) {
+        walletLogger.warn(`⚠️ Failed to check balance:`, balanceError as Error);
+      }
+
+      // Decrement recursion depth before returning
+      this.getUtxosRecursionDepth.set(accountId, currentDepth);
       return [];
     } catch (error) {
       walletLogger.error('❌ Failed to get UTXOs', error as Error);
+      // Decrement recursion depth even on error
+      const depth = this.getUtxosRecursionDepth.get(accountId);
+      if (depth !== undefined && depth > 0) {
+        this.getUtxosRecursionDepth.set(accountId, depth - 1);
+      }
       return [];
     }
+  }
+
+  /**
+   * Get address discovery service for an account (lazy initialization)
+   */
+  private getDiscoveryService(accountId: string): AddressDiscoveryService {
+    if (!this.discoveryServices.has(accountId)) {
+      this.discoveryServices.set(
+        accountId,
+        new AddressDiscoveryService(this.wasmWallet, accountId)
+      );
+    }
+    return this.discoveryServices.get(accountId)!;
   }
 
   /**
@@ -684,6 +858,9 @@ export class SimpleWalletImpl implements SimpleWallet {
       }
     }
     this.transactionMonitors.clear();
+
+    // Clear address discovery services
+    this.discoveryServices.clear();
 
     // Clear listeners
     this.transactionListeners.clear();
