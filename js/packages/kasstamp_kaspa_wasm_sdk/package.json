@@ -1,6 +1,6 @@
 {
   "name": "@kasstamp/kaspa_wasm_sdk",
-  "version": "0.0.9",
+  "version": "0.0.10",
   "description": "Pure Kaspa WASM bindings from rusty-kaspa - Low-level WASM access only",
   "type": "module",
   "main": "src/index.js",
