@@ -9,7 +9,11 @@ export default defineConfig({
   bundle: true,
   sourcemap: true,
   target: 'es2022',
-  minify: process.env.NODE_ENV === 'production',
+  // CRITICAL: Disable minification to preserve class names (Resolver, RpcClient, etc.)
+  // esbuild's keepNames doesn't prevent class name mangling, which breaks instanceof checks
+  // Since this package uses source files directly (package.json points to src/),
+  // any minification here would break WASM instanceof checks when consumed
+  minify: false,
   treeshake: true,
   outDir: 'dist',
   shims: true,
@@ -37,5 +41,8 @@ export default defineConfig({
     options.logOverride = {
       'duplicate-class-member': 'silent',
     };
+    // Explicitly ensure keepNames is set for WASM classes (Resolver, RpcClient, etc.)
+    // This prevents instanceof checks from failing when classes are minified
+    options.keepNames = true;
   },
 });

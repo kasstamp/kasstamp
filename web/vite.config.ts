@@ -11,12 +11,20 @@ export default defineConfig(({ command, mode }) => ({
     command === 'serve' && basicSsl(),
   ].filter(Boolean),
   build: {
+    // IMPORTANT: Do NOT enable minification (esbuild or terser) as it mangles class names
+    // which breaks instanceof checks in WASM SDK (e.g., instanceof Resolver fails).
+    // Vite defaults to esbuild minification in production, so we explicitly disable it.
+    // If minification is needed later, use terser with keep_classnames: true configuration.
+    minify: false,
     rollupOptions: {
       external: [
         'vite-plugin-node-polyfills/shims/process',
         'vite-plugin-node-polyfills/shims/global',
         'vite-plugin-node-polyfills/shims/buffer',
       ],
+      output: {
+        format: 'es',
+      },
     },
   },
   define: {
