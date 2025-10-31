@@ -14,6 +14,8 @@ const buttonVariants = cva(
           'border border-[var(--background-outline)] bg-[var(--surface-control)] text-[color:var(--text-strong)] hover:bg-[var(--surface-control)] active:bg-[var(--surface-control)] hover:border-[var(--background-outline)]',
         ghost:
           'bg-transparent text-[color:var(--text-strong)] hover:bg-[var(--surface-control)] active:bg-[var(--surface-control)]',
+        destructive:
+          'bg-red-500 text-white hover:bg-red-600 active:bg-red-700',
       },
       size: {
         default: 'h-9 rounded-3xl px-4 py-2',

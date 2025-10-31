@@ -20,6 +20,7 @@ import {
   WalletUnlockDialog,
   QRScannerDialog,
 } from '../components';
+import { ConfirmationDialog } from '@/shared/components/ui/ConfirmationDialog';
 import WalletManagementDialog from '@/features/wallet/components/WalletManagementDialog';
 import type { PrivacyMode } from '../types';
 import pako from 'pako';
@@ -233,6 +234,7 @@ export default function StampPage() {
   const [showWalletSecretDialog, setShowWalletSecretDialog] = useState(false);
   const [showWalletManagementDialog, setShowWalletManagementDialog] = useState(false);
   const [showQRScanner, setShowQRScanner] = useState(false);
+  const [showConfirmationDialog, setShowConfirmationDialog] = useState(false);
   const textAreaRef = useRef<HTMLTextAreaElement>(null);
 
   const handleErrorClick = () => {
@@ -350,7 +352,7 @@ export default function StampPage() {
     fileUpload.resetDragState();
   };
 
-  async function onSave() {
+  const handleStampingInitiation = async () => {
     if (!walletState.isConnected || !walletState.hasWallet) {
       setError('Please connect and setup a wallet first');
       return;
@@ -385,6 +387,14 @@ export default function StampPage() {
     // Otherwise, ask for credentials
     pageLogger.info('🔐 Requesting credentials to unlock signing enclave...');
     setShowWalletSecretDialog(true);
+  };
+
+  async function onSave() {
+    if (mode === 'public') {
+      setShowConfirmationDialog(true);
+    } else {
+      await handleStampingInitiation();
+    }
   }
 
   // Perform actual stamping after getting wallet secret (or using unlocked enclave)
@@ -794,6 +804,17 @@ export default function StampPage() {
           // since we don't store the receipt data globally. The error message will
           // guide them to try again after unlocking their wallet.
         }}
+      />
+      
+      <ConfirmationDialog
+        isOpen={showConfirmationDialog}
+        onClose={() => setShowConfirmationDialog(false)}
+        onConfirm={() => {
+          setShowConfirmationDialog(false);
+          void handleStampingInitiation();
+        }}
+        title="Public Mode Upload"
+        description="Warning: Uploading in public mode is irreversible. The uploaded data will be permanently and publicly visible on the blockchain. Do you want to continue?"
       />
     </div>
   );
