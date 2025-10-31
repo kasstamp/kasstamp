@@ -3,28 +3,32 @@
   "version": "0.0.9",
   "description": "Pure Kaspa WASM bindings from rusty-kaspa - Low-level WASM access only",
   "type": "module",
-  "main": "dist/index.js",
-  "module": "dist/index.js",
-  "types": "dist/index.d.ts",
+  "main": "src/index.js",
+  "module": "src/index.js",
+  "types": "src/index.d.ts",
   "exports": {
     ".": {
-      "types": "./dist/index.d.ts",
-      "default": "./dist/index.js"
+      "types": "./src/index.d.ts",
+      "default": "./src/index.js"
+    },
+    "./kaspa.js": {
+      "types": "./src/kaspa.d.ts",
+      "default": "./src/kaspa.js"
+    },
+    "./kaspa.d.ts": "./src/kaspa.d.ts",
+    "./wasm": {
+      "types": "./src/kaspa_bg.wasm.d.ts",
+      "default": "./src/kaspa_bg.wasm"
     }
   },
   "files": [
-    "dist",
-    "src",
-    "nodejs",
-    "web",
-    "README.md"
+    "src"
   ],
   "sideEffects": false,
   "license": "ISC",
   "scripts": {
-    "build": "npm run build:bundle && npm run build:types",
-    "build:bundle": "tsup src/index.ts --format esm --splitting false --clean --no-splitting --sourcemap",
-    "build:types": "tsc -p tsconfig.json --emitDeclarationOnly"
+    "build": "npm run build:bundle",
+    "build:bundle": "tsup --dts src/index.ts --format esm --splitting false --clean --no-splitting --sourcemap"
   },
   "devDependencies": {
     "tsup": "^8.0.0",

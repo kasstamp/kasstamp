@@ -1,5 +1,5 @@
 import { createLogger } from '@kasstamp/utils';
-import { initKaspaWasm, Wallet } from '@kasstamp/kaspa_wasm_sdk';
+import { Wallet } from '@kasstamp/kaspa_wasm_sdk';
 import type {
   WalletStorageManager,
   WalletDescriptor,
@@ -13,15 +13,7 @@ const storageLogger = createLogger('kasstamp:wallet:storage');
  * Simple storage manager that delegates to WASM SDK
  */
 export class SimpleWalletStorageManager implements WalletStorageManager {
-  private isInitialized = false;
   private currentNetwork: Network | null = null;
-
-  async initialize(): Promise<void> {
-    if (!this.isInitialized) {
-      await initKaspaWasm();
-      this.isInitialized = true;
-    }
-  }
 
   /**
    * Set the current network for wallet enumeration
@@ -39,8 +31,6 @@ export class SimpleWalletStorageManager implements WalletStorageManager {
     if (!this.currentNetwork) {
       throw new Error('Network not set. Call setNetwork() before listing wallets.');
     }
-
-    await this.initialize();
 
     // Create a temporary wallet instance to enumerate wallets
     // Use the current network so we only list wallets for this network
@@ -101,8 +91,6 @@ export class SimpleWalletStorageManager implements WalletStorageManager {
    */
   async deleteWallet(walletName: string): Promise<boolean> {
     try {
-      await this.initialize();
-
       // Find the wallet descriptor to get the exact filename
       const walletDescriptor = await this.getWalletDescriptor(walletName);
       if (!walletDescriptor) {
@@ -164,8 +152,6 @@ export class SimpleWalletStorageManager implements WalletStorageManager {
       if (!newName.trim()) {
         throw new Error('Wallet name cannot be empty');
       }
-
-      await this.initialize();
 
       storageLogger.debug(`✏️ Renaming wallet from "${oldName}" to "${newName}"...`);
 

@@ -15,18 +15,8 @@ export default [
       '**/coverage/**',
       '**/*.d.ts', // All .d.ts files (type definitions)
       '**/tsconfig.tsbuildinfo',
-      'examples/**/dist/**',
-      'examples/**/node_modules/**',
-      // Auto-generated WASM files (compiled from Rust, will have 'any' types)
-      'packages/kasstamp_kaspa_wasm_sdk/nodejs/**',
-      'packages/kasstamp_kaspa_wasm_sdk/web/**',
-      // Only ignore the actual WASM files, not our TypeScript wrappers
-      'packages/kasstamp_kaspa_wasm_sdk/nodejs/*.js',
-      'packages/kasstamp_kaspa_wasm_sdk/nodejs/*.d.ts',
-      'packages/kasstamp_kaspa_wasm_sdk/web/*.js',
-      'packages/kasstamp_kaspa_wasm_sdk/web/*.d.ts',
-      // WASM SDK wrapper uses 'any' for external bindings
-      'packages/kasstamp_kaspa_wasm_sdk/src/index.ts',
+      // Ignore kaspa wasm sdk files
+      'packages/kasstamp_kaspa_wasm_sdk/src/kaspa.*',
     ],
   },
 

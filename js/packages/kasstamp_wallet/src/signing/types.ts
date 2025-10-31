@@ -1,4 +1,4 @@
-import type { PendingTransaction } from '@kasstamp/kaspa_wasm_sdk';
+import { NetworkId, PendingTransaction } from '@kasstamp/kaspa_wasm_sdk';
 
 /**
  * Options for storing mnemonic in the enclave
@@ -164,19 +164,62 @@ export interface ISecureSigningEnclave {
   /**
    * Sign a transaction by auto-discovering required keys
    *
-   * This method automatically finds the correct keys for all UTXO inputs
-   * by scanning receive/change addresses (indices 0-9).
+   * This method automatically finds the correct keys for all UTXO inputs.
+   * It uses an address-to-derivation mapping if available, otherwise falls back
+   * to scanning addresses.
    *
    * @param transaction - PendingTransaction to sign
    * @param network - Network ID (e.g., "testnet-10")
    * @param accountIndex - Account index (default: 0)
+   * @param addressDerivationMap - Optional map of address -> derivation for efficient lookup
    * @throws Error if enclave is locked or required keys not found
    */
   signWithAutoDiscovery(
     transaction: PendingTransaction,
-    network: string,
-    accountIndex?: number
+    network: NetworkId,
+    accountIndex?: number,
+    addressDerivationMap?: Map<
+      string,
+      { accountIndex: number; addressIndex: number; isReceive: boolean }
+    >
   ): Promise<void>;
+
+  /**
+   * Derive primary addresses (receive[0] and change[0]) from stored mnemonic
+   *
+   * This method deterministically derives the primary addresses at index 0
+   * without exposing the mnemonic. The addresses are always consistent regardless
+   * of account descriptor changes in the WASM SDK.
+   *
+   * @param network - Network ID for address derivation
+   * @param accountIndex - Account index (default: 0)
+   * @returns Primary receive and change addresses at index 0
+   * @throws Error if enclave is locked or derivation fails
+   */
+  derivePrimaryAddresses(
+    network: NetworkId,
+    accountIndex?: number
+  ): Promise<{ receiveAddress: string; changeAddress: string }>;
+
+  /**
+   * Derive an address at a specific index from the mnemonic
+   *
+   * Used for address discovery without calling accountsCreateNewAddress().
+   * This prevents the WASM SDK from updating the account descriptor addresses.
+   *
+   * @param network - Network ID for address derivation
+   * @param accountIndex - Account index (default: 0)
+   * @param addressIndex - Address index within the account
+   * @param isReceive - True for receive address, false for change address
+   * @returns Address string at the specified index
+   * @throws Error if enclave is locked or derivation fails
+   */
+  deriveAddress(
+    network: NetworkId,
+    accountIndex: number,
+    addressIndex: number,
+    isReceive: boolean
+  ): Promise<string>;
 
   /**
    * Encrypt data using wallet-derived key
