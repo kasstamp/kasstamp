@@ -15,7 +15,9 @@ import initWasm from './kaspa.js';
 export async function initKaspaWasm(): Promise<void> {
   if (!wasmInit) {
     const wasmUrl = new URL('./kaspa_bg.wasm', import.meta.url).href;
-    wasmInit = initWasm(wasmUrl).then(() => {});
+    // Use object-based API to avoid deprecation warning
+    // New API: pass { module_or_path: url } instead of just url
+    wasmInit = initWasm({ module_or_path: wasmUrl }).then(() => {});
   }
   return wasmInit;
 }
