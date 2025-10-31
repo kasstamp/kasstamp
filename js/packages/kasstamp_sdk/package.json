@@ -1,6 +1,6 @@
 {
   "name": "@kasstamp/sdk",
-  "version": "0.0.9",
+  "version": "0.0.10",
   "description": "Professional Kaspa SDK - Zero-config enterprise blockchain integration",
   "type": "module",
   "main": "dist/index.js",

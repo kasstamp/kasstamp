@@ -1,6 +1,6 @@
 {
   "name": "@kasstamp/rpc",
-  "version": "0.0.9",
+  "version": "0.0.10",
   "description": "RPC client utilities for Kasstamp",
   "type": "module",
   "main": "dist/index.js",
