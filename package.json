@@ -22,8 +22,8 @@
   "scripts": {
     "commitlint": "commitlint --edit",
     "commitlint:check": "commitlint --from HEAD~1 --to HEAD --verbose",
-    "format": "npx prettier --write \"**/*.{ts,js,json,md,yaml,yml,html,svg}\" \"*.{ts,js,json,md,yaml,yml,html,svg}\"",
-    "format:check": "npx prettier --check \"**/*.{ts,js,json,md,yaml,yml,html,svg}\" \"*.{ts,js,json,md,yaml,yml,html,svg}\""
+    "format": "npx prettier --write \"**/*.{ts,js,json,md,yaml,yml,html,svg}\" \"*.{ts,js,json,md,yaml,yml,html,svg}\" \"js/packages/kasstamp_kaspa_wasm_sdk/src/kaspa.d.ts\"",
+    "format:check": "npx prettier --check \"**/*.{ts,js,json,md,yaml,yml,html,svg}\" \"*.{ts,js,json,md,yaml,yml,html,svg}\" \"js/packages/kasstamp_kaspa_wasm_sdk/src/kaspa.d.ts\""
   },
   "devDependencies": {
     "@commitlint/cli": "^20.1.0",

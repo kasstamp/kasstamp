@@ -5,9 +5,9 @@ import type { SimpleWallet } from '@kasstamp/wallet';
 import { KaspaApiClient, type NetworkType } from '@kasstamp/kaspa_api';
 import { deserializePayload } from '../preparation';
 import type {
-  StampingReceipt,
   ReconstructionProgressCallback,
   ReconstructionResult,
+  StampingReceipt,
 } from '../types';
 
 /**
@@ -34,7 +34,7 @@ export async function reconstructFileFromReceipt(
 
   let accountId: string | undefined;
   if (wallet && wallet.wasmWallet) {
-    accountId = wallet.accounts?.[0]?.accountId;
+    accountId = (await wallet.getWalletAccount()).accountId;
     if (isEncrypted && !accountId) {
       throw new Error('No account ID available for private receipt');
     }
@@ -103,14 +103,14 @@ export async function reconstructFileFromReceipt(
   }
 
   let networkType: NetworkType;
-  const networkStr = receipt.network;
-  if (networkStr === 'testnet-10') {
-    networkType = 'testnet-10';
-  } else if (networkStr === 'mainnet') {
+
+  if (receipt.network.type == 0) {
     networkType = 'mainnet';
+  } else if (receipt.network.type == 1) {
+    networkType = 'testnet-10';
   } else {
     throw new Error(
-      `Invalid network in receipt: ${networkStr}. Only 'mainnet' and 'testnet-10' are supported.`
+      `Invalid network in receipt: ${receipt.network.type}. Only 'mainnet' and 'testnet-10' are supported.`
     );
   }
 

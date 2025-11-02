@@ -54,7 +54,7 @@ export interface TransactionMonitoringEvents {
 export class TransactionMonitoringService {
   private wasmWallet: WasmWallet;
   private accountId: string;
-  private networkId: string;
+  private networkId: NetworkId;
   private config: Required<TransactionMonitoringConfig>;
   private events: TransactionMonitoringEvents;
   private isRunning = false;
@@ -64,7 +64,7 @@ export class TransactionMonitoringService {
   constructor(
     wasmWallet: WasmWallet,
     accountId: string,
-    networkId: string,
+    networkId: NetworkId,
     config: TransactionMonitoringConfig = {},
     events: TransactionMonitoringEvents = {}
   ) {
@@ -117,7 +117,7 @@ export class TransactionMonitoringService {
       // Check for new transactions
       const transactions = await this.wasmWallet.transactionsDataGet({
         accountId: this.accountId,
-        networkId: new NetworkId(this.networkId),
+        networkId: this.networkId,
         start: BigInt(0),
         end: BigInt(100),
       });
@@ -169,7 +169,7 @@ export class TransactionMonitoringService {
 export function createTransactionMonitoringService(
   wasmWallet: WasmWallet,
   accountId: string,
-  networkId: string,
+  networkId: NetworkId,
   config?: TransactionMonitoringConfig,
   events?: TransactionMonitoringEvents
 ): TransactionMonitoringService {

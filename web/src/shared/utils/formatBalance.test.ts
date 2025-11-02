@@ -90,10 +90,19 @@ describe('formatBalanceForDisplay', () => {
 });
 
 describe('formatBalanceCompact', () => {
-  it('should format balance with KAS suffix and custom decimal limit', () => {
-    expect(formatBalanceCompact('1.23456789', 2)).toBe('1.23 KAS');
-    expect(formatBalanceCompact('1.23456789', 4)).toBe('1.2345 KAS');
-    expect(formatBalanceCompact('1000.0000')).toBe('1000 KAS'); // Default 4 decimals
+  it('should convert sompi to KAS and remove trailing zeros', () => {
+    // 123456789 sompi = 1.23456789 KAS
+    expect(formatBalanceCompact('123456789')).toBe('1.23456789 KAS');
+    // 1234567 sompi = 0.01234567 KAS
+    expect(formatBalanceCompact('1234567')).toBe('0.01234567 KAS');
+    // 100000000 sompi = 1 KAS
+    expect(formatBalanceCompact('100000000')).toBe('1 KAS');
+    // 1000000000 sompi = 10 KAS
+    expect(formatBalanceCompact('1000000000')).toBe('10 KAS');
+    // 0 sompi = 0 KAS
+    expect(formatBalanceCompact('0')).toBe('0 KAS');
+    // 4798980677 sompi = 47.98980677 KAS
+    expect(formatBalanceCompact('4798980677')).toBe('47.98980677 KAS');
   });
 });
 

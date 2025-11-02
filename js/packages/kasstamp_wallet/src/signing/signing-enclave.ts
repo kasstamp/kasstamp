@@ -90,18 +90,24 @@ export function createSigningEnclave(
       // Convert encrypted mnemonic from base64 to bytes
       const encryptedBytes = Uint8Array.from(atob(encryptedMnemonic), (c) => c.charCodeAt(0));
 
-      // Binary format (more secure than JSON)
-      const version = 1;
+      // Binary format v2 includes BIP39 passphrase (v1 did not)
+      const version = 2;
       const saltLength = encryptionSalt.length;
       const encDataLength = encryptedBytes.length;
 
-      // Calculate total size
-      const totalSize = 1 + 2 + saltLength + 4 + encDataLength;
+      // Encode BIP39 passphrase as UTF-8 bytes
+      const passphraseBytes = bip39Passphrase
+        ? new TextEncoder().encode(bip39Passphrase)
+        : new Uint8Array(0);
+      const passphraseLength = passphraseBytes.length;
+
+      // Calculate total size: version(1) + salt_len(2) + salt + enc_len(4) + enc_data + passphrase_len(2) + passphrase
+      const totalSize = 1 + 2 + saltLength + 4 + encDataLength + 2 + passphraseLength;
       const buffer = new Uint8Array(totalSize);
 
       let offset = 0;
 
-      // Write version (1 byte)
+      // Write version (1 byte) - v2 includes passphrase
       buffer[offset++] = version;
 
       // Write salt length (2 bytes, big-endian)
@@ -120,6 +126,16 @@ export function createSigningEnclave(
 
       // Write encrypted data
       buffer.set(encryptedBytes, offset);
+      offset += encDataLength;
+
+      // Write passphrase length (2 bytes, big-endian)
+      buffer[offset++] = (passphraseLength >> 8) & 0xff;
+      buffer[offset++] = passphraseLength & 0xff;
+
+      // Write passphrase (if any)
+      if (passphraseLength > 0) {
+        buffer.set(passphraseBytes, offset);
+      }
 
       // Convert to hex string (like WASM wallet)
       const hexString = Array.from(buffer)
@@ -128,7 +144,7 @@ export function createSigningEnclave(
 
       storageBackend.setItem(storageKey, hexString);
       enclaveLogger.debug(
-        `💾 Encrypted data saved to localStorage (${storageKey}) - ${buffer.length} bytes`
+        `💾 Encrypted data saved to localStorage (${storageKey}) - ${buffer.length} bytes${passphraseLength > 0 ? ' (with BIP39 passphrase)' : ''}`
       );
     } catch (error) {
       enclaveLogger.error('❌ Failed to save to localStorage:', error as Error);
@@ -170,7 +186,7 @@ export function createSigningEnclave(
           // Read version (1 byte)
           const version = bytes[offset++];
 
-          if (version !== 1) {
+          if (version < 1 || version > 2) {
             enclaveLogger.warn(`⚠️ Unknown enclave version: ${version}`);
             return false;
           }
@@ -191,13 +207,37 @@ export function createSigningEnclave(
 
           // Read encrypted data
           const encData = bytes.slice(offset, offset + encDataLength);
+          offset += encDataLength;
+
+          // Read passphrase (version 2+)
+          if (version >= 2) {
+            // Read passphrase length (2 bytes, big-endian)
+            const passphraseLength = (bytes[offset++] << 8) | bytes[offset++];
+
+            if (passphraseLength > 0) {
+              // Read passphrase
+              const passphraseBytes = bytes.slice(offset, offset + passphraseLength);
+              bip39Passphrase = new TextDecoder().decode(passphraseBytes);
+              enclaveLogger.debug(`📂 Loaded BIP39 passphrase from storage`, {
+                passphraseLength,
+                passphrasePreview: `${bip39Passphrase.substring(0, 3)}...`,
+                note: 'BIP39 passphrase is critical for address derivation - must match import passphrase',
+              });
+            } else {
+              bip39Passphrase = '';
+              enclaveLogger.debug('📂 No BIP39 passphrase in storage (empty string)');
+            }
+          } else {
+            // Version 1: No passphrase stored, default to empty
+            bip39Passphrase = '';
+          }
 
           // Load into closure scope (convert back to base64 for internal format)
           encryptedMnemonic = btoa(String.fromCharCode(...encData));
           encryptionSalt = salt;
 
           enclaveLogger.debug(
-            `📂 Encrypted data loaded from localStorage (${storageKey}) - binary format`
+            `📂 Encrypted data loaded from localStorage (${storageKey}) - binary format v${version}${bip39Passphrase ? ' (with BIP39 passphrase)' : ''}`
           );
           return true;
         } catch (err) {
@@ -553,8 +593,12 @@ export function createSigningEnclave(
      */
     async signWithAutoDiscovery(
       transaction: PendingTransaction,
-      network: string,
-      accountIndex: number = 0
+      network: NetworkId,
+      accountIndex: number = 0,
+      addressDerivationMap?: Map<
+        string,
+        { accountIndex: number; addressIndex: number; isReceive: boolean }
+      >
     ): Promise<void> {
       // Check if unlocked
       if (!isUnlocked || !encryptionKey) {
@@ -593,53 +637,124 @@ export function createSigningEnclave(
         // Step 1: Decrypt mnemonic
         mnemonic = await decryptData(encryptedMnemonic, encryptionKey);
 
-        // Step 2: Find matching keys by scanning receive/change addresses
+        // Step 2: Find matching keys using efficient lookup + fallback scan
         privateKeys = [];
         const foundAddresses = new Set<string>();
-        const networkId = new NetworkId(network);
 
-        // Scan receive addresses (0-9)
-        enclaveLogger.debug(`🔍 Scanning receive addresses (indices 0-9)...`);
-        for (
-          let addressIndex = 0;
-          addressIndex < 10 && foundAddresses.size < requiredAddresses.length;
-          addressIndex++
-        ) {
-          const key = derivePrivateKey(mnemonic, bip39Passphrase, accountIndex, addressIndex, true);
-          const publicKey = key.toPublicKey();
-          const address = publicKey.toAddress(networkId).toString();
-          enclaveLogger.debug(`  Receive[${addressIndex}]: ${address}`);
+        // METHOD 1: Use address derivation map for direct lookup (efficient)
+        if (addressDerivationMap && addressDerivationMap.size > 0) {
+          enclaveLogger.debug(
+            `🔍 Using address derivation map for efficient key lookup (${addressDerivationMap.size} entries)`
+          );
+          for (const address of requiredAddresses) {
+            if (foundAddresses.has(address)) continue;
 
-          if (requiredAddresses.includes(address)) {
-            privateKeys.push(key);
-            foundAddresses.add(address);
-            enclaveLogger.debug(`✅ Found key for receive address[${addressIndex}]: ${address}`);
+            const derivation = addressDerivationMap.get(address);
+            if (derivation) {
+              // Direct derivation - no scanning needed!
+              const key = derivePrivateKey(
+                mnemonic,
+                bip39Passphrase,
+                derivation.accountIndex,
+                derivation.addressIndex,
+                derivation.isReceive
+              );
+              const derivedAddr = key.toPublicKey().toAddress(network).toString();
+
+              // Verify the derived address matches (safety check)
+              if (derivedAddr === address) {
+                privateKeys.push(key);
+                foundAddresses.add(address);
+                enclaveLogger.debug(
+                  `✅ Found ${derivation.isReceive ? 'receive' : 'change'}[${derivation.addressIndex}] for ${address} (via derivation map)`
+                );
+              } else {
+                enclaveLogger.warn(`⚠️ Address derivation mismatch for ${address}`, {
+                  expected: address,
+                  derived: derivedAddr,
+                  derivation,
+                });
+              }
+            }
           }
         }
 
-        // Scan change addresses (0-9)
-        enclaveLogger.debug(`🔍 Scanning change addresses (indices 0-9)...`);
-        for (
-          let addressIndex = 0;
-          addressIndex < 10 && foundAddresses.size < requiredAddresses.length;
-          addressIndex++
-        ) {
-          const key = derivePrivateKey(
-            mnemonic,
-            bip39Passphrase,
-            accountIndex,
-            addressIndex,
-            false
+        // METHOD 2: Fallback to scanning for addresses not found in map
+        // NOTE: This should be rare - all addresses with UTXOs should be tracked during discovery
+        // This fallback is only for edge cases (e.g., virtual UTXOs from transaction chaining)
+        const remainingAddresses = requiredAddresses.filter((addr) => !foundAddresses.has(addr));
+        if (remainingAddresses.length > 0) {
+          enclaveLogger.warn(
+            `⚠️ Falling back to address scanning for ${remainingAddresses.length} address(es) not in derivation map`,
+            {
+              addresses: remainingAddresses,
+              note: 'This should be rare - all addresses with UTXOs should be tracked during discovery. Possible causes: virtual UTXOs from chained transactions.',
+            }
           );
-          const publicKey = key.toPublicKey();
-          const address = publicKey.toAddress(networkId).toString();
-          enclaveLogger.debug(`  Change[${addressIndex}]: ${address}`);
 
-          if (requiredAddresses.includes(address)) {
-            privateKeys.push(key);
-            foundAddresses.add(address);
-            enclaveLogger.debug(`✅ Found key for change address[${addressIndex}]: ${address}`);
+          // Start with indices 0-500 (same as before, but only for missing addresses)
+          const maxIndex = 500;
+          let scanCount = 0;
+
+          // Scan receive addresses
+          for (
+            let addressIndex = 0;
+            addressIndex < maxIndex && foundAddresses.size < requiredAddresses.length;
+            addressIndex++
+          ) {
+            const key = derivePrivateKey(
+              mnemonic,
+              bip39Passphrase,
+              accountIndex,
+              addressIndex,
+              true
+            );
+            const addr = key.toPublicKey().toAddress(network).toString();
+            scanCount++;
+            if (remainingAddresses.includes(addr) && !foundAddresses.has(addr)) {
+              privateKeys.push(key);
+              foundAddresses.add(addr);
+              // Track this derivation for future use
+              if (addressDerivationMap) {
+                addressDerivationMap.set(addr, { accountIndex, addressIndex, isReceive: true });
+              }
+              enclaveLogger.debug(
+                `✅ Found receive[${addressIndex}] for ${addr} (via fallback scan)`
+              );
+            }
           }
+
+          // Scan change addresses
+          for (
+            let addressIndex = 0;
+            addressIndex < maxIndex && foundAddresses.size < requiredAddresses.length;
+            addressIndex++
+          ) {
+            const key = derivePrivateKey(
+              mnemonic,
+              bip39Passphrase,
+              accountIndex,
+              addressIndex,
+              false
+            );
+            const addr = key.toPublicKey().toAddress(network).toString();
+            scanCount++;
+            if (remainingAddresses.includes(addr) && !foundAddresses.has(addr)) {
+              privateKeys.push(key);
+              foundAddresses.add(addr);
+              // Track this derivation for future use
+              if (addressDerivationMap) {
+                addressDerivationMap.set(addr, { accountIndex, addressIndex, isReceive: false });
+              }
+              enclaveLogger.debug(
+                `✅ Found change[${addressIndex}] for ${addr} (via fallback scan)`
+              );
+            }
+          }
+
+          enclaveLogger.debug(
+            `Scanned ${scanCount} address indices (receive + change combined) for fallback`
+          );
         }
 
         // Verify we found all required keys
@@ -653,7 +768,19 @@ export function createSigningEnclave(
         // Step 3: Sign the transaction with found keys
         transaction.sign(privateKeys);
 
-        enclaveLogger.debug(`Transaction signed with ${privateKeys.length} auto-discovered keys`);
+        const viaMap = addressDerivationMap
+          ? requiredAddresses.filter((addr) => {
+              const derivation = addressDerivationMap.get(addr);
+              return derivation && foundAddresses.has(addr);
+            }).length
+          : 0;
+        const viaScan = requiredAddresses.length - viaMap;
+
+        enclaveLogger.debug(`Transaction signed with ${privateKeys.length} keys`, {
+          viaDerivationMap: viaMap,
+          viaScan,
+          note: viaMap > 0 ? 'Used efficient derivation map lookup' : 'All keys found via scan',
+        });
       } catch (error) {
         enclaveLogger.error('❌ Failed to sign transaction with auto-discovery:', error as Error);
         throw new Error(`Failed to sign transaction: ${(error as Error).message}`);
@@ -661,6 +788,93 @@ export function createSigningEnclave(
         // CRITICAL: Clear sensitive data immediately
         mnemonic = undefined;
         privateKeys = undefined;
+      }
+    },
+
+    derivePrimaryAddresses: async (
+      network: NetworkId,
+      accountIndex: number = 0
+    ): Promise<{ receiveAddress: string; changeAddress: string }> => {
+      if (!isUnlocked || !encryptionKey || !encryptedMnemonic) {
+        throw new Error('Enclave is locked. Please unlock first.');
+      }
+
+      let mnemonic: string | undefined;
+
+      try {
+        // Decrypt mnemonic temporarily
+        mnemonic = await decryptData(encryptedMnemonic, encryptionKey);
+
+        // CRITICAL: Log passphrase state for debugging
+        enclaveLogger.debug('Deriving primary addresses', {
+          accountIndex,
+          hasPassphrase: !!bip39Passphrase,
+          passphraseLength: bip39Passphrase?.length || 0,
+          passphrasePreview: bip39Passphrase ? `${bip39Passphrase.substring(0, 3)}...` : '(none)',
+          note: 'BIP39 passphrase is used in seed derivation - must be consistent for same addresses',
+        });
+
+        // Derive primary addresses at index 0
+        const receiveKey = derivePrivateKey(mnemonic, bip39Passphrase, accountIndex, 0, true);
+        const changeKey = derivePrivateKey(mnemonic, bip39Passphrase, accountIndex, 0, false);
+
+        const receiveAddress = receiveKey.toPublicKey().toAddress(network).toString();
+        const changeAddress = changeKey.toPublicKey().toAddress(network).toString();
+
+        enclaveLogger.debug('Primary addresses derived', {
+          receiveAddress,
+          changeAddress,
+          accountIndex,
+          hasPassphrase: !!bip39Passphrase,
+          note: 'These addresses are always at index 0 and never change (derived from mnemonic + passphrase)',
+        });
+
+        return {
+          receiveAddress,
+          changeAddress,
+        };
+      } catch (error) {
+        enclaveLogger.error('Failed to derive primary addresses', error as Error);
+        throw new Error(`Failed to derive primary addresses: ${(error as Error).message}`);
+      } finally {
+        // CRITICAL: Clear sensitive data immediately
+        mnemonic = undefined;
+      }
+    },
+
+    deriveAddress: async (
+      network: NetworkId,
+      accountIndex: number,
+      addressIndex: number,
+      isReceive: boolean
+    ): Promise<string> => {
+      if (!isUnlocked || !encryptionKey || !encryptedMnemonic) {
+        throw new Error('Enclave is locked. Please unlock first.');
+      }
+
+      let mnemonic: string | undefined;
+
+      try {
+        // Decrypt mnemonic temporarily
+        mnemonic = await decryptData(encryptedMnemonic, encryptionKey);
+
+        // Derive address at the specified index
+        const key = derivePrivateKey(
+          mnemonic,
+          bip39Passphrase,
+          accountIndex,
+          addressIndex,
+          isReceive
+        );
+        const address = key.toPublicKey().toAddress(network).toString();
+
+        return address;
+      } catch (error) {
+        enclaveLogger.error('Failed to derive address', error as Error);
+        throw new Error(`Failed to derive address: ${(error as Error).message}`);
+      } finally {
+        // CRITICAL: Clear sensitive data immediately
+        mnemonic = undefined;
       }
     },
 

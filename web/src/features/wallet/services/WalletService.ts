@@ -1,17 +1,13 @@
 import {
-  type BalanceMonitoringService,
-  type ITransactionRecord,
   KaspaSDK,
   type KaspaSDKConfig,
-  KaspaWalletFactory,
   type Network,
   type SimpleWallet,
+  SimpleWalletEventType,
   type TransactionMonitoringService,
   type WalletDescriptor,
   walletStorage,
   type IAccountDescriptor,
-  type BalanceEvent,
-  type TransactionEvent,
 } from '@kasstamp/sdk';
 import { walletLogger } from '@/core/utils/logger.ts';
 import { APP_CONFIG } from '../constants';
@@ -50,14 +46,11 @@ export class WalletService {
   private kaspaSDK: KaspaSDK | null = null;
   private currentWallet: SimpleWallet | null = null;
   private currentAccount: IAccountDescriptor | null = null;
-  private balanceService: BalanceMonitoringService | null = null;
   private transactionMonitoringService: TransactionMonitoringService | null = null;
   private currentWalletName: string | null = null;
   private currentBalance: string | null = null;
-
-  // Wallet listener callbacks (stored for cleanup)
-  private walletBalanceCallback: ((event: BalanceEvent) => void) | null = null;
-  private walletTransactionCallback: ((event: TransactionEvent) => void) | null = null;
+  private isConnecting: boolean = false;
+  private isOpeningWallet: boolean = false;
 
   // Simple event system - properly typed with union type
   private eventListeners: Map<
@@ -107,17 +100,18 @@ export class WalletService {
   }
 
   getState() {
+    // Note: For address, we use account descriptor as fallback since getState() is synchronous
+    // The primary address should be used when available, but we can't make this async
+    // Callers should use getPrimaryAddresses() directly if they need the deterministic address
     return {
       isConnected: !!this.kaspaSDK && this.kaspaSDK.isReady(),
       isInitialized: !!this.kaspaSDK,
       currentNetwork: this.kaspaSDK?.getNetwork() || 'testnet-10',
       hasWallet: !!this.currentWallet,
-      walletLocked: this.currentWallet?.locked ?? true,
+      walletLocked: this.currentWallet?.signingEnclave.isLocked() ?? true,
       address: this.currentAccount?.receiveAddress?.toString() || null,
-      accounts: this.currentWallet?.accounts || [],
       walletName: this.currentWalletName,
-      balance: this.currentBalance, // Return stored balance instead of null
-      lastSyncTime: new Date(),
+      balance: this.currentBalance,
     };
   }
 
@@ -126,6 +120,14 @@ export class WalletService {
    * @param network - Network to connect to (required: 'mainnet' or 'testnet-10')
    */
   async connect(network?: string): Promise<void> {
+    // Idempotenz: bereits verbunden oder in Verbindungsaufbau → noop
+    if (this.kaspaSDK && this.kaspaSDK.isReady()) {
+      return;
+    }
+    if (this.isConnecting) {
+      return;
+    }
+    this.isConnecting = true;
     // Use configured network if not provided
     const targetNetwork = network || APP_CONFIG.defaultNetwork;
 
@@ -146,9 +148,8 @@ export class WalletService {
         debug: APP_CONFIG.showDebugLogs,
       };
 
-      // Initialize SDK with wallet factory
-      const walletFactory = new KaspaWalletFactory();
-      this.kaspaSDK = await KaspaSDK.init(config, walletFactory);
+      // Initialize SDK (no factory needed - SimpleWallet handles everything)
+      this.kaspaSDK = await KaspaSDK.init(config);
       walletLogger.info('✅ Unified SDK ready!');
 
       // Set the network on wallet storage so it only lists wallets for this network
@@ -163,6 +164,8 @@ export class WalletService {
         code: 'CONNECTION_ERROR',
       });
       throw error;
+    } finally {
+      this.isConnecting = false;
     }
   }
 
@@ -226,6 +229,7 @@ export class WalletService {
         walletLogger.info(`📡 Firing wallet-opened event with walletName: "${newName}"`);
         // Notify listeners that the wallet name changed
         const address = this.currentAccount?.receiveAddress;
+        this.currentBalance = await this.getBalance();
         this.notifyListeners('wallet-opened', {
           address: address?.toString() || '',
           walletName: newName,
@@ -268,7 +272,7 @@ export class WalletService {
     // Convert string to NetworkId if needed
     const networkId = this.mapStringToNetwork(targetNetwork);
 
-    const result = await this.kaspaSDK.createNewWallet({
+    const result = await this.kaspaSDK.createWallet({
       name: walletName,
       walletSecret,
       words,
@@ -280,25 +284,27 @@ export class WalletService {
     this.currentWalletName = walletName;
 
     // Unlock the wallet to access accounts (wallet is created in locked state)
+    // Address discovery will run automatically to find any UTXOs
     await this.currentWallet.unlockFromPassword(walletSecret);
 
-    // Load existing accounts from the wallet (SDK creates the first account automatically)
-    const existingAccounts = await this.currentWallet.getExistingAccounts();
+    // Load existing account from the wallet
+    this.currentAccount = await this.currentWallet.getWalletAccount();
 
-    if (existingAccounts.length === 0) {
-      throw new Error('No accounts found in created wallet - SDK should have created one');
-    }
-    this.currentAccount = existingAccounts[0];
+    // CRITICAL: Always use primary addresses (derived from mnemonic at index 0) for consistency
+    const primaryAddresses = await this.currentWallet.getPrimaryAddresses();
+    const primaryReceiveAddress = primaryAddresses.receiveAddress;
 
-    walletLogger.info(
-      `✅ Wallet created! Address: ${this.currentAccount.receiveAddress?.toString()}`
-    );
+    walletLogger.info(`✅ Wallet created! Primary address: ${primaryReceiveAddress}`);
 
-    // Set up monitoring services using SDK orchestration
-    await this.setupMonitoringServices();
+    // Set up event listeners for balance changes AFTER unlock completes
+    // (unlock() calls initialize() which starts UTXO processor and may clear listeners)
+    this.setupWalletEventListeners();
 
+    this.currentBalance = await this.getBalance();
+
+    // Use primary address for consistency
     this.notifyListeners('wallet-created', {
-      address: this.currentAccount.receiveAddress?.toString() || '',
+      address: primaryReceiveAddress || '',
       mnemonic: result.mnemonic,
       walletName: this.currentWalletName || walletName,
     });
@@ -348,9 +354,7 @@ export class WalletService {
     // Unlock the wallet to access accounts (wallet is created in locked state)
     try {
       await this.currentWallet.unlockFromPassword(walletSecret);
-      walletLogger.info(
-        `✅ Wallet unlocked successfully. Locked state: ${this.currentWallet.locked}`
-      );
+      walletLogger.info(`✅ Wallet unlocked successfully.`);
     } catch (unlockError) {
       walletLogger.error('❌ Failed to unlock wallet after import:', unlockError as Error);
       throw new Error(
@@ -358,31 +362,32 @@ export class WalletService {
       );
     }
 
-    walletLogger.info(`📋 Loading accounts from imported wallet...`);
-    // Load existing accounts from the wallet (SDK creates the first account automatically)
-    const existingAccounts = await this.currentWallet.getExistingAccounts();
-    walletLogger.info(`📋 Found ${existingAccounts.length} accounts`);
+    // Load existing account from the wallet
+    this.currentAccount = await this.currentWallet.getWalletAccount();
 
-    if (existingAccounts.length === 0) {
-      throw new Error('No accounts found in imported wallet - SDK should have created one');
-    }
-    this.currentAccount = existingAccounts[0];
+    // CRITICAL: Always use primary addresses (derived from mnemonic at index 0) for consistency
+    // The account descriptor addresses may change, but primary addresses are always the same
+    const primaryAddresses = await this.currentWallet.getPrimaryAddresses();
+    const primaryReceiveAddress = primaryAddresses.receiveAddress;
 
-    walletLogger.info(
-      `✅ Wallet imported! Address: ${this.currentAccount.receiveAddress?.toString()}`
-    );
+    walletLogger.info(`✅ Wallet imported! Primary address: ${primaryReceiveAddress}`);
     walletLogger.info(`📝 Wallet state after import:`, {
       walletName: this.currentWalletName,
       hasWallet: !!this.currentWallet,
-      walletLocked: this.currentWallet?.locked,
-      address: this.currentAccount?.receiveAddress?.toString(),
+      primaryReceiveAddress: primaryReceiveAddress,
+      accountDescriptorReceiveAddress: this.currentAccount?.receiveAddress?.toString(),
+      addressesMatch: this.currentAccount?.receiveAddress?.toString() === primaryReceiveAddress,
+      note: 'Using primary address (from mnemonic) for consistency. Account descriptor address may vary.',
     });
 
-    // Set up monitoring services
-    await this.setupMonitoringServices();
+    // Set up event listeners for balance changes
+    this.setupWalletEventListeners();
 
+    this.currentBalance = await this.getBalance();
+
+    // Use primary address for consistency
     this.notifyListeners('wallet-imported', {
-      address: this.currentAccount.receiveAddress?.toString() || '',
+      address: primaryReceiveAddress || '',
       walletName: this.currentWalletName || walletName,
     });
   }
@@ -395,229 +400,165 @@ export class WalletService {
       throw new Error('SDK not initialized');
     }
 
-    walletLogger.info(`🔓 Opening existing wallet: ${walletName}...`);
-
-    // Open the existing wallet using the SDK (network is handled internally)
-    this.currentWallet = await this.kaspaSDK.openExistingWallet(walletName, walletSecret);
-    this.currentWalletName = walletName;
-
-    // Unlock the wallet to access accounts (wallet is opened in locked state)
-    await this.currentWallet.unlockFromPassword(walletSecret);
-
-    // Load existing accounts from the wallet
-    const existingAccounts = await this.currentWallet.getExistingAccounts();
-
-    if (existingAccounts.length === 0) {
-      // If no existing accounts, create the first one
-      this.currentAccount = await this.currentWallet.deriveNextAccount(0);
+    if (this.isOpeningWallet) {
       walletLogger.info(
-        `✅ Wallet opened! Created first account: ${this.currentAccount.receiveAddress?.toString()}`
+        `⏳ Wallet open already in progress, ignoring duplicate request for "${walletName}"`
       );
-    } else {
-      // Use the first existing account
-      this.currentAccount = existingAccounts[0];
-      walletLogger.info(
-        `✅ Wallet opened! Loaded existing account: ${this.currentAccount.receiveAddress?.toString()}`
-      );
-    }
-
-    // Set up monitoring services
-    await this.setupMonitoringServices();
-
-    this.notifyListeners('wallet-opened', {
-      address: this.currentAccount.receiveAddress?.toString() || '',
-      walletName: this.currentWalletName || walletName,
-    });
-  }
-
-  /**
-   * Set up monitoring services using SDK orchestration
-   */
-  private async setupMonitoringServices(): Promise<void> {
-    if (!this.kaspaSDK || !this.currentAccount) {
-      walletLogger.warn('⚠️ SDK or account not available for monitoring setup');
       return;
     }
+    this.isOpeningWallet = true;
+    walletLogger.info(`🔓 Opening existing wallet: ${walletName}...`);
 
-    const address = this.currentAccount.receiveAddress?.toString();
-    const wasmWallet = this.currentWallet?.wasmWallet;
+    try {
+      // Open the existing wallet using the SDK (network is handled internally)
+      this.currentWallet = await this.kaspaSDK.openExistingWallet(walletName, walletSecret);
+      this.currentWalletName = walletName;
 
-    walletLogger.info('🔧 Setting up monitoring services...');
+      // Unlock the wallet to access accounts (wallet is opened in locked state)
+      await this.currentWallet.unlockFromPassword(walletSecret);
 
-    if (APP_CONFIG.showDebugLogs) {
-      walletLogger.info('🔧 Address:', { address });
-      walletLogger.info('🔧 Account ID:', { accountId: this.currentAccount.accountId });
-      walletLogger.info('🔧 WASM Wallet available:', { hasWallet: !!wasmWallet });
+      // Load existing account from the wallet
+      this.currentAccount = await this.currentWallet.getWalletAccount();
+
+      // CRITICAL: Always use primary addresses for consistency
+      const primaryAddresses = await this.currentWallet.getPrimaryAddresses();
+      const primaryReceiveAddress = primaryAddresses.receiveAddress;
+
+      walletLogger.info(`✅ Wallet opened! Primary address: ${primaryReceiveAddress}`);
+      walletLogger.debug('Account descriptor vs primary address', {
+        accountDescriptorAddress: this.currentAccount.receiveAddress?.toString(),
+        primaryAddress: primaryReceiveAddress,
+        addressesMatch: this.currentAccount.receiveAddress?.toString() === primaryReceiveAddress,
+      });
+
+      // Set up event listeners for balance changes AFTER unlock completes
+      // (unlock() calls initialize() which starts UTXO processor and may clear listeners)
+      this.setupWalletEventListeners();
+
+      this.currentBalance = await this.getBalance();
+
+      // Use primary address for consistency
+      this.notifyListeners('wallet-opened', {
+        address: primaryReceiveAddress || '',
+        walletName: this.currentWalletName || walletName,
+      });
+    } finally {
+      this.isOpeningWallet = false;
     }
-
-    // Ensure the account is properly activated in the WASM wallet
-    if (wasmWallet && this.currentAccount.accountId) {
-      try {
-        walletLogger.info('🔧 Activating account for monitoring...');
-        await wasmWallet.accountsActivate({
-          accountIds: [this.currentAccount.accountId],
-        });
-        walletLogger.info('✅ Account activated for monitoring');
-      } catch (error) {
-        walletLogger.warn('⚠️ Failed to activate account:', error as Error);
-      }
-    }
-
-    // Create all services using SDK orchestration with wallet instance (wallet-centric)
-    if (!this.currentWallet) {
-      throw new Error('No wallet available for service creation');
-    }
-    const services = this.kaspaSDK.createWalletServices(this.currentWallet);
-
-    this.balanceService = services.balanceMonitoring;
-    this.transactionMonitoringService = services.transactionMonitoring;
-
-    // Set up balance monitoring
-    this.balanceService.on('balance-updated', (data) => {
-      walletLogger.info(`💰 Balance updated: ${data.balanceKas} KAS (${data.source})`);
-      this.currentBalance = data.balanceKas; // Store balance in service
-      this.notifyListeners('balance-updated', { balance: data.balanceKas });
-    });
-
-    this.balanceService.on('error', (error) => {
-      walletLogger.error('❌ Balance monitoring error:', error);
-      this.notifyListeners('error', error);
-    });
-
-    // Start monitoring
-    await this.balanceService.startMonitoring();
-    await this.transactionMonitoringService.start();
-
-    // ✅ Set up wallet-level listeners for direct balance and transaction updates
-    if (this.currentWallet && this.currentAccount.accountId) {
-      walletLogger.info('🔧 Setting up wallet-level listeners...');
-
-      // Create and store balance callback for cleanup later
-      this.walletBalanceCallback = (balanceEvent) => {
-        walletLogger.info(`💰 [Wallet Listener] Balance changed:`, {
-          mature: balanceEvent.mature.toString(),
-          pending: balanceEvent.pending.toString(),
-          total: balanceEvent.total.toString(),
-          balanceKas: balanceEvent.balanceKas,
-        });
-
-        // Update stored balance and notify listeners
-        this.currentBalance = balanceEvent.balanceKas;
-        this.notifyListeners('balance-updated', { balance: balanceEvent.balanceKas });
-      };
-
-      // Create and store transaction callback for cleanup later
-      this.walletTransactionCallback = (txEvent) => {
-        walletLogger.info(`📝 [Wallet Listener] Transaction ${txEvent.type}:`, {
-          id: txEvent.transaction.id,
-          type: txEvent.type,
-          timestamp: txEvent.timestamp,
-        });
-
-        // You can add more specific handling here if needed
-        // For example, notify UI of new transactions
-      };
-
-      // Register the listeners
-      this.currentWallet.onBalanceUpdate(this.walletBalanceCallback);
-      this.currentWallet.onTransactionUpdate(this.walletTransactionCallback);
-
-      walletLogger.info('✅ Wallet-level listeners registered');
-    }
-
-    walletLogger.info('✅ Monitoring services started');
   }
 
   /**
    * Get current balance
    */
   async getBalance(): Promise<string> {
-    if (!this.balanceService) {
-      throw new Error('Balance service not initialized');
+    walletLogger.debug('📊 getBalance() called', {
+      hasWallet: !!this.currentWallet,
+      hasAccount: !!this.currentAccount,
+      walletLocked: this.currentWallet?.signingEnclave.isLocked() ?? true,
+    });
+
+    if (this.currentAccount && this.currentWallet) {
+      try {
+        const balanceBigInt = await this.currentWallet.getBalance();
+        const balance = balanceBigInt.toString();
+
+        walletLogger.debug('📊 Balance retrieved from wallet', {
+          balanceBigInt: balanceBigInt.toString(),
+          balanceString: balance,
+          previousBalance: this.currentBalance,
+          balanceChanged: balance !== this.currentBalance,
+        });
+
+        walletLogger.info(
+          `💰 Current balance: ${balance} sompi (${(Number(balance) / 1e8).toFixed(8)} KAS)`
+        );
+
+        return balance;
+      } catch (error) {
+        walletLogger.error('❌ Failed to get balance from wallet', error as Error);
+        throw error;
+      }
     }
 
-    try {
-      const { balanceKas } = await this.balanceService.getCurrentBalance();
-      return balanceKas;
-    } catch (error) {
-      walletLogger.error('❌ Failed to get balance:', error as Error);
-      return '0';
-    }
+    walletLogger.debug('📊 No wallet or account, returning 0');
+    return '0';
   }
 
   /**
-   * Get transaction history
+   * Set up event listener for wallet events (receives all event types)
+   *
+   * This should be called after wallet is created, imported, or unlocked.
+   * The listener receives ALL event types - check the event type inside to handle different events.
    */
-  async getTransactionHistory(): Promise<ITransactionRecord[]> {
+  private setupWalletEventListeners(): void {
     if (!this.currentWallet) {
-      walletLogger.warn('⚠️ Wallet not available');
-      return [];
+      walletLogger.warn('⚠️ Cannot set up event listeners: no wallet');
+      return;
     }
 
-    try {
-      walletLogger.info(`📋 Getting transaction history for all accounts in wallet`);
+    walletLogger.debug('🔧 Setting up wallet event listener', {
+      walletName: this.currentWalletName,
+      walletLocked: this.currentWallet.signingEnclave.isLocked(),
+    });
 
-      // Wait for wallet to be synced first
-      if (!this.currentWallet.isSynced()) {
-        walletLogger.info('⏳ Wallet not synced, waiting for sync...');
-        const synced = await this.currentWallet.waitForSync(30000); // Wait up to 30 seconds
-        if (!synced) {
-          walletLogger.warn('⚠️ Wallet sync timeout, proceeding anyway...');
-        }
-      }
-
-      // Get all accounts in the wallet
-      const accounts = this.currentWallet.accounts;
-      walletLogger.info(`📋 Found ${accounts.length} accounts in wallet`);
-
-      if (accounts.length === 0) {
-        walletLogger.info('📋 No accounts found in wallet');
-        return [];
-      }
-
-      // Get transactions from all accounts in parallel
-      const transactionPromises = accounts.map(async (account) => {
-        try {
-          walletLogger.info(`📋 Getting transactions for account: ${account.accountId}`);
-          if (!this.currentWallet) {
-            walletLogger.warn('⚠️ Current wallet is null');
-            return [];
-          }
-          const accountTransactions = await this.currentWallet.getTransactionHistory(
-            account.accountId
-          );
-          walletLogger.info(
-            `📋 Found ${accountTransactions.length} transactions for account ${account.accountId}`
-          );
-          return accountTransactions;
-        } catch (error) {
-          walletLogger.warn(
-            `⚠️ Failed to get transactions for account ${account.accountId}:`,
-            error as Error
-          );
-          return [];
-        }
+    // Single event listener that receives all event types
+    // Check the event type inside to handle different events
+    this.currentWallet.addEventListener((event: SimpleWalletEventType) => {
+      walletLogger.debug('📡 Wallet event received in WalletService', {
+        eventType: event,
+        isBalanceChanged: event === SimpleWalletEventType.BalanceChanged,
       });
 
-      // Wait for all transactions to be fetched in parallel
-      const allTransactionArrays = await Promise.all(transactionPromises);
+      // Handle balance changed events
+      if (event === SimpleWalletEventType.BalanceChanged) {
+        walletLogger.debug('✅ Balance changed event received, fetching new balance', {
+          currentBalance: this.currentBalance,
+        });
 
-      // Flatten all transactions into a single array
-      const allTransactions = allTransactionArrays.flat();
+        // Fetch the actual balance immediately - no delays
+        // Simple approach: wallet emits events, we check balance and only update if changed
+        this.getBalance()
+          .then((balance) => {
+            const balanceString = balance.toString();
 
-      // Sort by timestamp (newest first)
-      allTransactions.sort((a, b) => {
-        const timeA = a.unixtimeMsec ? Number(a.unixtimeMsec) : 0;
-        const timeB = b.unixtimeMsec ? Number(b.unixtimeMsec) : 0;
-        return timeB - timeA;
-      });
+            walletLogger.debug('📊 Balance fetched after balance-changed event', {
+              newBalance: balanceString,
+              previousBalance: this.currentBalance,
+              balanceChanged: balanceString !== this.currentBalance,
+            });
 
-      walletLogger.info(`📋 Total transactions from all accounts: ${allTransactions.length}`);
-      return allTransactions;
-    } catch (error) {
-      walletLogger.error('❌ Failed to get transaction history:', error as Error);
-      return [];
-    }
+            // Only update if balance actually changed
+            // This handles temporary 0 balance: if it's still 0, we won't update again
+            // If it changed to non-zero, we update
+            if (balanceString !== this.currentBalance) {
+              // Update internal balance state
+              this.currentBalance = balanceString;
+
+              // Notify listeners
+              this.notifyListeners('balance-updated', {
+                balance: balanceString,
+              });
+
+              walletLogger.debug('✅ Balance updated and listeners notified', {
+                newBalance: balanceString,
+              });
+            } else {
+              walletLogger.debug('⏭️ Balance unchanged, skipping update');
+            }
+          })
+          .catch((error) => {
+            walletLogger.error(
+              '❌ Failed to get balance after balance-changed event',
+              error as Error
+            );
+          });
+      }
+      // Handle other event types here in the future
+    });
+
+    walletLogger.debug('✅ Wallet event listener set up successfully (receives all event types)', {
+      walletName: this.currentWalletName,
+    });
   }
 
   /**
@@ -625,22 +566,13 @@ export class WalletService {
    */
   async disconnect(): Promise<void> {
     try {
-      // Clean up wallet-level listeners first
+      // Lock wallet (automatically cleans up event listeners)
       if (this.currentWallet) {
-        if (this.walletBalanceCallback) {
-          this.currentWallet.removeBalanceListener(this.walletBalanceCallback);
-          walletLogger.info('🧹 Removed wallet balance listener');
-        }
-        if (this.walletTransactionCallback) {
-          this.currentWallet.removeTransactionListener(this.walletTransactionCallback);
-          walletLogger.info('🧹 Removed wallet transaction listener');
-        }
+        await this.currentWallet.lock();
       }
 
       // Stop monitoring services
-      if (this.balanceService) {
-        await this.balanceService.stopMonitoring();
-      }
+
       if (this.transactionMonitoringService) {
         await this.transactionMonitoringService.stop();
       }
@@ -654,11 +586,8 @@ export class WalletService {
       this.kaspaSDK = null;
       this.currentWallet = null;
       this.currentAccount = null;
-      this.balanceService = null;
       this.transactionMonitoringService = null;
       this.currentWalletName = null;
-      this.walletBalanceCallback = null;
-      this.walletTransactionCallback = null;
 
       walletLogger.info('✅ React wallet service disconnected');
       this.notifyListeners('disconnected', {});

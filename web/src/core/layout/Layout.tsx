@@ -133,11 +133,10 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             <div className="flex flex-shrink-0 items-center gap-1 sm:gap-2">
               {/* Balance to the left of wallet button - shown on all screen sizes */}
               {walletState.balance && (
-                <div
-                  className="mr-1 text-[10px] whitespace-nowrap sm:mr-2 sm:text-sm"
-                  style={{ color: 'var(--text)' }}
-                >
-                  {formatBalanceCompact(walletState.balance)}
+                <div className="mr-1 whitespace-nowrap sm:mr-2">
+                  <div className="text-[10px] sm:text-sm" style={{ color: 'var(--text)' }}>
+                    {formatBalanceCompact(walletState.balance)}
+                  </div>
                 </div>
               )}
               {/* Wallet button */}

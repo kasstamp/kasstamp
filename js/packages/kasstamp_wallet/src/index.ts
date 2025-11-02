@@ -1,18 +1,15 @@
 export type {
-  SimpleWallet,
   WalletDescriptor,
   TransactionEvent,
   BalanceEvent,
-  WalletFactory,
   SDKWalletConfig,
   WasmWallet,
 } from './types';
 
 export type { Network } from './types';
 
-export { walletStorage } from './wallet';
-
-export { KaspaWalletFactory } from './factory';
+export { walletStorage, SimpleWallet, SimpleWalletEventType } from './wallet';
+export type { SimpleWalletNotificationCallback } from './wallet';
 
 export { createSigningEnclave } from './signing';
 export type {
@@ -24,15 +21,5 @@ export type {
   EnclaveStatus,
 } from './signing';
 
-export {
-  BalanceMonitoringService,
-  createBalanceMonitoringService,
-  TransactionMonitoringService,
-  createTransactionMonitoringService,
-} from './monitoring';
-export type {
-  BalanceMonitoringConfig,
-  BalanceMonitoringEvents,
-  TransactionMonitoringConfig,
-  TransactionMonitoringEvents,
-} from './monitoring';
+export { TransactionMonitoringService, createTransactionMonitoringService } from './monitoring';
+export type { TransactionMonitoringConfig, TransactionMonitoringEvents } from './monitoring';

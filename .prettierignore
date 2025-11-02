@@ -31,11 +31,9 @@ yarn.lock
 tsconfig.tsbuildinfo
 **/*.tsbuildinfo
 
-# WASM bindings
-js/**/kaspa_wasm_sdk/web/**/*.js
-js/**/kaspa_wasm_sdk/nodejs/**/*.js
-js/packages/kasstamp_kaspa_wasm_sdk/web
-js/packages/kasstamp_kaspa_wasm_sdk/nodejs
+# WASM bindings (We want that generated tyeps from wasm sdk gets formatted)
+*.wasm
+!js/packages/kasstamp_kaspa_wasm_sdk/src/kaspa.d.ts
 
 # Environment files
 .env

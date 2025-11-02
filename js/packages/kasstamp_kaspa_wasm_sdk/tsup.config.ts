@@ -1,20 +1,24 @@
 import { defineConfig } from 'tsup';
 
 export default defineConfig({
-  // Inherit from root config but add WASM-specific configurations
-  entry: ['src/index.ts', 'src/platform.ts'],
-  format: ['esm', 'cjs'],
+  entry: ['src/index.ts'],
+  format: ['esm'],
   dts: false,
   clean: true,
   splitting: false,
   bundle: true,
   sourcemap: true,
   target: 'es2022',
-  minify: process.env.NODE_ENV === 'production',
+  // CRITICAL: Disable minification to preserve class names (Resolver, RpcClient, etc.)
+  // esbuild's keepNames doesn't prevent class name mangling, which breaks instanceof checks
+  // Since this package uses source files directly (package.json points to src/),
+  // any minification here would break WASM instanceof checks when consumed
+  minify: false,
   treeshake: true,
   outDir: 'dist',
   shims: true,
   platform: 'neutral',
+  keepNames: true,
 
   // Keep these external as they should be provided by the environment
   external: [
@@ -29,19 +33,16 @@ export default defineConfig({
     /^kaspa\//,
   ],
 
-  // Define globals for browser builds
   define: {
     'process.env.NODE_ENV': JSON.stringify(process.env.NODE_ENV || 'development'),
   },
 
-  // Ensure compatibility
-  keepNames: true,
-
-  // WASM-specific: Suppress esbuild warnings for generated kaspa.js files
-  esbuildOptions: (options) => {
-    // Suppress duplicate class member warnings from generated WASM files
+  esbuildOptions(options) {
     options.logOverride = {
       'duplicate-class-member': 'silent',
     };
+    // Explicitly ensure keepNames is set for WASM classes (Resolver, RpcClient, etc.)
+    // This prevents instanceof checks from failing when classes are minified
+    options.keepNames = true;
   },
 });

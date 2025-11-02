@@ -58,9 +58,9 @@ get_latest_version_silent() {
 # Function to get the latest release version (with logging)
 get_latest_version() {
     log_info "Fetching latest release version from GitHub..."
-    
+
     local version=$(get_latest_version_silent)
-    
+
     log_success "Latest version: $version"
     printf '%s' "$version"
 }
@@ -69,16 +69,20 @@ get_latest_version() {
 clean_existing_resources() {
     log_info "Cleaning existing WASM resources..."
 
-    # Remove nodejs directory
+    # Remove nodejs directory (no longer used)
     if [ -d "$PACKAGE_DIR/nodejs" ]; then
         log_info "Removing existing nodejs/ directory..."
         rm -rf "$PACKAGE_DIR/nodejs"
     fi
 
-    # Remove web directory
+    # Remove src/web directory (we will rebuild src)
     if [ -d "$PACKAGE_DIR/web" ]; then
         log_info "Removing existing web/ directory..."
         rm -rf "$PACKAGE_DIR/web"
+    fi
+    if [ -d "$PACKAGE_DIR/src" ]; then
+        log_info "Removing existing src/ directory..."
+        rm -rf "$PACKAGE_DIR/src"
     fi
 
     # Remove dist directory (will be rebuilt)
@@ -151,17 +155,9 @@ update_wasm_sdk() {
 
     log_info "Found SDK directory: $sdk_dir"
 
-    # Copy nodejs variant
-    if [ -d "${sdk_dir}/nodejs" ]; then
-        log_info "Installing Node.js WASM variant..."
-        cp -r "${sdk_dir}/nodejs" "$PACKAGE_DIR/"
-        log_success "Node.js variant installed"
-    else
-        log_error "Node.js variant not found in SDK"
-        exit 1
-    fi
+    # Skip nodejs variant entirely (web-only package)
 
-    # Copy web variant
+    # Copy web variant (will become src)
     if [ -d "${sdk_dir}/web" ]; then
         log_info "Installing Web WASM variant..."
         cp -r "${sdk_dir}/web" "$PACKAGE_DIR/"
@@ -174,30 +170,51 @@ update_wasm_sdk() {
     # Go back to package directory
     cd "$PACKAGE_DIR"
 
+    # Normalize layout: move content of kaspa/ to roots and delete other folders
+    log_info "Normalizing SDK layout (flattening 'kaspa/' into roots)..."
+    # nodejs: nothing to do (removed)
+    # web
+    if [ -d "web/kaspa" ]; then
+        for f in web/kaspa/*; do
+            [ -e "$f" ] || continue
+            base="$(basename "$f")"
+            mv -f "$f" "web/$base"
+        done
+        rm -rf web/kaspa
+    fi
+    # Remove any other subdirs under web (kaspa-dev, kaspa-rpc, etc.)
+    if [ -d "web" ]; then
+        for d in web/*/; do
+            [ -d "$d" ] || continue
+            rm -rf "$d"
+        done
+    fi
+    # Move flattened web to src and remove nodejs/web entirely (web-only package)
+    if [ -d "web" ]; then
+        log_info "Moving web/ to src/ (web-only layout) ..."
+        mv -f web src
+    fi
+    rm -rf nodejs
+    log_success "Layout normalized (src only)"
+
+    # Cleanup unwanted files from SDK roots
+    log_info "Removing unnecessary SDK files (package.json, README.md) from roots..."
+    rm -f src/package.json src/README.md
+    log_success "Unnecessary files removed"
+
     # Verify installation
     log_info "Verifying WASM SDK installation..."
 
     local errors=0
 
-    # Check nodejs files
-    if [ ! -f "nodejs/kaspa.js" ]; then
-        log_error "Missing nodejs/kaspa.js"
+    # Check src files (web-only)
+    if [ ! -f "src/kaspa.js" ]; then
+        log_error "Missing src/kaspa.js"
         errors=$((errors + 1))
     fi
 
-    if [ ! -f "nodejs/kaspa_bg.wasm" ]; then
-        log_error "Missing nodejs/kaspa_bg.wasm"
-        errors=$((errors + 1))
-    fi
-
-    # Check web files
-    if [ ! -f "web/kaspa.js" ]; then
-        log_error "Missing web/kaspa.js"
-        errors=$((errors + 1))
-    fi
-
-    if [ ! -f "web/kaspa_bg.wasm" ]; then
-        log_error "Missing web/kaspa_bg.wasm"
+    if [ ! -f "src/kaspa_bg.wasm" ]; then
+        log_error "Missing src/kaspa_bg.wasm"
         errors=$((errors + 1))
     fi
 
@@ -208,22 +225,34 @@ update_wasm_sdk() {
 
     log_success "WASM SDK installation verified successfully"
 
-    # Update version in package.json
-    if [ -f "package.json" ] && command -v jq >/dev/null 2>&1; then
-        log_info "Updating package.json version..."
-        local new_version="${version#v}" # Remove 'v' prefix
-        jq --arg version "$new_version" '.version = $version' package.json > package.json.tmp && mv package.json.tmp package.json
-        log_success "Updated package.json version to $new_version"
+    # Run project formatting from repository root
+    ROOT_DIR="$(cd "$PACKAGE_DIR/../../.." && pwd)"
+    if command -v npm >/dev/null 2>&1; then
+        log_info "Running project formatting at root (npm run format)..."
+        set +e
+        (cd "$ROOT_DIR" && npm run -s format)
+        format_status=$?
+        set -e
+        if [ $format_status -ne 0 ]; then
+            log_warn "Formatting step failed; please run 'npm run format' manually."
+        else
+            log_success "Project formatted successfully"
+        fi
+    else
+        log_warn "npm not found in PATH; skipping formatting step"
     fi
+
 
     # Clean up temp directory
     rm -rf "$TEMP_DIR"
 
     # Show summary
     log_info "📊 Installation Summary:"
-    echo "  • Node.js WASM: $(du -sh nodejs/ | cut -f1)"
-    echo "  • Web WASM: $(du -sh web/ | cut -f1)"
-    echo "  • Total size: $(du -sh nodejs/ web/ | tail -1 | cut -f1)"
+    if [ -d src ]; then
+        echo "  • SDK (src): $(du -sh src/ | cut -f1)"
+    else
+        echo "  • SDK (src): N/A"
+    fi
     echo "  • Version: $version"
 
     log_success "🎉 Kaspa WASM SDK successfully updated to $version!"

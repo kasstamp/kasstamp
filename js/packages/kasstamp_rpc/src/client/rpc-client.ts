@@ -1,13 +1,8 @@
 import { createLogger } from '@kasstamp/utils';
-import {
-  Encoding,
-  initKaspaWasm,
-  Resolver,
-  RpcClient as WasmRpcClient,
-} from '@kasstamp/kaspa_wasm_sdk';
 import { UniversalEventEmitter } from '../utils';
 import { KaspaConnectionError, KaspaRpcClientError } from './errors';
 import type { ConnectionState, KaspaRpcClientOptions } from '../types';
+import { Encoding, Resolver, RpcClient } from '@kasstamp/kaspa_wasm_sdk';
 
 const clientLogger = createLogger('kasstamp:rpc:client');
 
@@ -18,10 +13,9 @@ const clientLogger = createLogger('kasstamp:rpc:client');
  * official kaspa-wasm SDK with proper connection management and logging.
  */
 export class KaspaRpcClient extends UniversalEventEmitter {
-  private rpcClient: WasmRpcClient | null = null;
-  private options: Required<KaspaRpcClientOptions>;
+  private rpcClient: RpcClient | null = null;
+  private readonly options: Required<KaspaRpcClientOptions>;
   private connectionState: ConnectionState;
-  private isWasmInitialized = false;
 
   constructor(options: KaspaRpcClientOptions) {
     super();
@@ -52,16 +46,8 @@ export class KaspaRpcClient extends UniversalEventEmitter {
    * Initialize WASM module
    */
   private async initializeWasm(): Promise<void> {
-    if (this.isWasmInitialized) {
-      return;
-    }
-
     try {
       clientLogger.debug('Initializing kaspa-wasm module');
-
-      await initKaspaWasm();
-
-      this.isWasmInitialized = true;
       clientLogger.info('kaspa-wasm initialized successfully');
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error);
@@ -117,7 +103,7 @@ export class KaspaRpcClient extends UniversalEventEmitter {
         nodeUrl: this.options.nodeUrl,
       });
 
-      this.rpcClient = new WasmRpcClient({
+      this.rpcClient = new RpcClient({
         resolver: new Resolver(),
         networkId: this.options.network,
         encoding: Encoding.Borsh,
@@ -251,16 +237,9 @@ export class KaspaRpcClient extends UniversalEventEmitter {
   }
 
   /**
-   * Get the underlying WASM RPC client for direct method access
-   */
-  get wasmRpcClient(): WasmRpcClient | null {
-    return this.rpcClient;
-  }
-
-  /**
    * Direct access to kaspa-wasm RpcClient
    */
-  get rpc(): WasmRpcClient {
+  get rpc(): RpcClient {
     if (!this.rpcClient) {
       throw new KaspaRpcClientError('Not connected to Kaspa network');
     }
@@ -337,13 +316,12 @@ export class KaspaRpcClient extends UniversalEventEmitter {
       }
 
       // Use the kaspa-wasm RpcClient method directly
-      const rpcClient = this.rpcClient as WasmRpcClient;
       const methodFn = (
-        rpcClient as unknown as { [key: string]: (...args: unknown[]) => Promise<T> }
+        this.rpcClient as unknown as { [key: string]: (...args: unknown[]) => Promise<T> }
       )[method];
 
       if (typeof methodFn === 'function') {
-        return await methodFn.call(rpcClient, params);
+        return await methodFn.call(this.rpcClient, params);
       } else {
         throw new KaspaRpcClientError(`RPC method '${method}' not available`);
       }

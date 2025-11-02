@@ -1,22 +1,12 @@
 import { createLogger } from '@kasstamp/utils';
 import { createKaspaClient, KaspaRpcClient, type KaspaRpcClientOptions } from '@kasstamp/rpc';
 import { buildStampingPayload, GeneratorTransactionService } from '@kasstamp/tx';
+import { Address, estimateTransactions, initKaspaWasm } from '@kasstamp/kaspa_wasm_sdk';
 import {
-  initKaspaWasm,
-  estimateTransactions,
-  Address,
-  getNetworkId,
-} from '@kasstamp/kaspa_wasm_sdk';
-import {
+  createTransactionMonitoringService,
   Network,
   type SDKWalletConfig,
-  type SimpleWallet,
-  type WalletFactory,
-  WasmWallet,
-  type BalanceMonitoringConfig,
-  BalanceMonitoringService,
-  createBalanceMonitoringService,
-  createTransactionMonitoringService,
+  SimpleWallet,
   TransactionMonitoringService,
 } from '@kasstamp/wallet';
 import {
@@ -49,21 +39,17 @@ export class KaspaSDK {
   private config: KaspaSDKConfig;
   private rpcClient: KaspaRpcClient | null = null;
   private isInitialized = false;
-  private readonly walletFactory: WalletFactory | null = null;
-
-  private constructor(config: KaspaSDKConfig, walletFactory?: WalletFactory) {
+  private constructor(config: KaspaSDKConfig) {
     this.config = config;
-    this.walletFactory = walletFactory ?? null;
   }
 
   /**
    * Initialize the Professional Kaspa SDK
    *
    * @param config - SDK configuration (network is required)
-   * @param walletFactory - Optional wallet factory for dependency injection
    * @returns Promise<KaspaSDK> - Initialized SDK instance
    */
-  static async init(config: KaspaSDKConfig, walletFactory?: WalletFactory): Promise<KaspaSDK> {
+  static async init(config: KaspaSDKConfig): Promise<KaspaSDK> {
     if (KaspaSDK.instance && KaspaSDK.instance.isInitialized) {
       return KaspaSDK.instance;
     }
@@ -73,14 +59,11 @@ export class KaspaSDK {
         KaspaSDK.logger.info('Initializing Professional Enterprise Kaspa SDK');
       }
 
-      // Initialize WASM first
+      // Ensure WASM is initialized once for the session
       await initKaspaWasm();
+      if (config.debug) KaspaSDK.logger.info('WASM initialized');
 
-      if (config.debug) {
-        KaspaSDK.logger.info('WASM initialized');
-      }
-
-      const instance = new KaspaSDK(config, walletFactory);
+      const instance = new KaspaSDK(config);
       await instance.initialize();
 
       KaspaSDK.instance = instance;
@@ -123,17 +106,11 @@ export class KaspaSDK {
    * @param options - Wallet creation options
    * @returns Object containing the wallet and mnemonic
    */
-  async createNewWallet(
+  async createWallet(
     options: SDKWalletConfig
   ): Promise<{ wallet: SimpleWallet; mnemonic: string }> {
     if (!this.isInitialized) {
       throw new Error('Professional SDK not initialized - call KaspaSDK.init() first');
-    }
-
-    if (!this.walletFactory) {
-      throw new Error(
-        'Wallet factory not provided - inject wallet factory during SDK initialization'
-      );
     }
 
     if (!options.walletSecret) {
@@ -152,7 +129,7 @@ export class KaspaSDK {
       network: options.network || this.config.network,
     };
 
-    return await this.walletFactory.createNewWallet(walletOptions);
+    return await SimpleWallet.create(walletOptions);
   }
 
   /**
@@ -165,12 +142,6 @@ export class KaspaSDK {
   async importWallet(mnemonic: string, options: SDKWalletConfig): Promise<SimpleWallet> {
     if (!this.isInitialized) {
       throw new Error('Professional SDK not initialized - call KaspaSDK.init() first');
-    }
-
-    if (!this.walletFactory) {
-      throw new Error(
-        'Wallet factory not provided - inject wallet factory during SDK initialization'
-      );
     }
 
     if (!options.walletSecret) {
@@ -189,7 +160,7 @@ export class KaspaSDK {
       network: options.network || this.config.network,
     };
 
-    return await this.walletFactory.createWalletFromMnemonic(mnemonic, walletOptions);
+    return await SimpleWallet.createFromMnemonic(mnemonic, walletOptions);
   }
 
   /**
@@ -204,22 +175,11 @@ export class KaspaSDK {
       throw new Error('Professional SDK not initialized - call KaspaSDK.init() first');
     }
 
-    if (!this.walletFactory) {
-      throw new Error(
-        'Wallet factory not provided - inject wallet factory during SDK initialization'
-      );
-    }
-
     if (this.config.debug) {
       KaspaSDK.logger.info('Opening existing wallet', { walletName, network: this.config.network });
     }
 
-    // Pass the network directly to the factory
-    return await this.walletFactory.openExistingWallet(
-      walletName,
-      walletSecret,
-      this.config.network
-    );
+    return await SimpleWallet.open(walletName, walletSecret, this.config.network);
   }
 
   /**
@@ -378,61 +338,58 @@ export class KaspaSDK {
     if (wallet) {
       // Method 1: Use wallet with real UTXOs (most accurate)
       try {
-        const accounts = wallet.accounts;
-        if (accounts && accounts.length > 0) {
-          const accountId = accounts[0].accountId;
-          const receiveAddress = accounts[0].receiveAddress?.toString();
-          const changeAddress = accounts[0].changeAddress?.toString();
-          const networkId = wallet.network?.toString() || 'testnet-10';
+        const account = await wallet.getWalletAccount();
+        const receiveAddress = account.receiveAddress?.toString();
+        const changeAddress = account.changeAddress?.toString();
+        const networkId = wallet.network?.toString() || 'testnet-10';
 
-          if (receiveAddress && changeAddress) {
-            const utxos = await wallet.getUtxos(accountId);
+        if (receiveAddress && changeAddress) {
+          const utxos = await wallet.getUtxos();
 
-            estimationLogger.info('Using wallet-based fee calculation', {
-              utxoCount: utxos.length,
-              address: receiveAddress,
+          estimationLogger.info('Using wallet-based fee calculation (mature UTXOs)', {
+            utxoCount: utxos.length,
+            address: receiveAddress,
+          });
+
+          // Estimate each envelope using Generator with real UTXOs
+          const estimationPromises = envelopes.map(async (envelope) => {
+            const payloadInfo = buildStampingPayload({
+              metadata: envelope.metadata,
+              chunkData: envelope.payload,
             });
 
-            // Estimate each envelope using Generator with real UTXOs
-            const estimationPromises = envelopes.map(async (envelope) => {
-              const payloadInfo = buildStampingPayload({
-                metadata: envelope.metadata,
-                chunkData: envelope.payload,
-              });
+            return await GeneratorTransactionService.estimateStampingTransaction({
+              recipient: receiveAddress,
+              changeAddress,
+              utxos,
+              payload: payloadInfo.payload,
+              networkId,
+              priorityFee: options.priorityFee,
+              amount: 0n, // No explicit output - only change + payload
+            });
+          });
 
-              return await GeneratorTransactionService.estimateStampingTransaction({
-                recipient: receiveAddress,
-                changeAddress,
-                utxos,
-                payload: payloadInfo.payload,
-                networkId,
-                priorityFee: options.priorityFee,
-                amount: 0n, // No explicit output - only change + payload
-              });
+          const estimations = await Promise.all(estimationPromises);
+
+          for (const estimation of estimations) {
+            estimationLogger.debug('Wallet estimation (real UTXOs)', {
+              mass: estimation.totalMass.toString(),
+              fees: estimation.totalFees.toString(),
+              feesKAS: (Number(estimation.totalFees) / 100000000).toFixed(8),
+              transactionCount: estimation.transactionCount,
             });
 
-            const estimations = await Promise.all(estimationPromises);
-
-            for (const estimation of estimations) {
-              estimationLogger.debug('Wallet estimation (real UTXOs)', {
-                mass: estimation.totalMass.toString(),
-                fees: estimation.totalFees.toString(),
-                feesKAS: (Number(estimation.totalFees) / 100000000).toFixed(8),
-                transactionCount: estimation.transactionCount,
-              });
-
-              totalTransactions += estimation.transactionCount;
-              totalFees += estimation.totalFees;
-              totalMass += estimation.totalMass;
-            }
-
-            feeCalculationMethod = 'wallet';
-            estimationLogger.info('Wallet-based estimation complete', {
-              totalTransactions,
-              totalFeesSompi: totalFees.toString(),
-              totalMass: totalMass.toString(),
-            });
+            totalTransactions += estimation.transactionCount;
+            totalFees += estimation.totalFees;
+            totalMass += estimation.totalMass;
           }
+
+          feeCalculationMethod = 'wallet';
+          estimationLogger.info('Wallet-based estimation complete', {
+            totalTransactions,
+            totalFeesSompi: totalFees.toString(),
+            totalMass: totalMass.toString(),
+          });
         }
       } catch (error) {
         estimationLogger.warn(
@@ -450,9 +407,8 @@ export class KaspaSDK {
         // Use WASM SDK estimateTransactions for accurate mass AND fee calculation
         // Create NetworkId and dummy address with correct network
         const networkString = this.networkToString(this.config.network);
-        const NetworkIdClass = await getNetworkId();
-        const networkId = new NetworkIdClass(networkString);
-        const addressPrefix = networkId.addressPrefix();
+        const networkId = wallet.network?.toString() || 'testnet-10';
+        const addressPrefix = networkId == 'testnet-10' ? 'kaspatest' : 'kaspa';
 
         // Create a dummy address with the correct network prefix
         const dummyAddress = new Address(
@@ -637,31 +593,6 @@ export class KaspaSDK {
   }
 
   /**
-   * Create balance monitoring service for a wallet address
-   * Uses WASM types directly - no custom conversions
-   */
-  createBalanceMonitoringService(
-    address: string,
-    wasmWallet?: WasmWallet,
-    accountId?: string
-  ): BalanceMonitoringService {
-    if (!this.isInitialized || !this.rpcClient) {
-      throw new Error('SDK not initialized - call KaspaSDK.init() first');
-    }
-
-    const config: BalanceMonitoringConfig = {
-      address,
-      wasmWallet,
-      accountId,
-      rpcClient: this.rpcClient,
-      pollingInterval: this.config.pollingIntervals?.balanceMonitoring ?? 30000, // 30 seconds default
-      debug: this.config.debug ?? false,
-    };
-
-    return createBalanceMonitoringService(config);
-  }
-
-  /**
    * Create transaction monitoring service for a wallet and account
    * Uses wallet instances for better integration
    */
@@ -677,37 +608,6 @@ export class KaspaSDK {
         pollInterval: this.config.pollingIntervals?.transactionMonitoring ?? 60000,
       }
     );
-  }
-
-  /**
-   * Create a complete wallet service orchestration
-   * Returns all monitoring services for a wallet (all accounts)
-   */
-  createWalletServices(wallet: SimpleWallet) {
-    // Get all accounts from the wallet
-    const accounts = wallet.accounts;
-    if (accounts.length === 0) {
-      throw new Error('No accounts found in wallet');
-    }
-
-    // Use the first account's address for balance monitoring (primary account)
-    const primaryAccount = accounts[0];
-    const address = primaryAccount.receiveAddress?.toString();
-    if (!address) {
-      throw new Error(`Primary account has no receive address`);
-    }
-
-    return {
-      balanceMonitoring: this.createBalanceMonitoringService(
-        address,
-        wallet.wasmWallet,
-        primaryAccount.accountId
-      ),
-      transactionMonitoring: this.createTransactionMonitoringService(
-        wallet,
-        primaryAccount.accountId
-      ),
-    };
   }
 
   /**
@@ -977,200 +877,6 @@ export class KaspaSDK {
   }
 
   /**
-   * Estimate stamping cost and details BEFORE actually stamping
-   * Uses official Kaspa Generator for accurate estimation
-   */
-  async estimateStamping(
-    file: File,
-    wallet: SimpleWallet,
-    options: {
-      mode: StampingMode;
-      compression?: boolean;
-      priorityFee: bigint; // Priority fee in sompi (required)
-    }
-  ): Promise<{
-    originalSize: number;
-    processedSize: number;
-    chunkCount: number;
-    estimatedTransactions: number;
-    estimatedFeesSompi: bigint;
-    estimatedFeesKAS: number;
-    estimatedMass: bigint;
-    storageAmountKAS: number;
-    totalCostKAS: number;
-    processingResult: ProcessingResult;
-  }> {
-    if (!this.isInitialized) {
-      throw new Error('Professional SDK not initialized - call KaspaSDK.init() first');
-    }
-
-    // Get account and address information
-    const accounts = wallet.accounts;
-    if (!accounts || accounts.length === 0) {
-      throw new Error('No accounts available in wallet');
-    }
-    const accountId = accounts[0].accountId;
-    const receiveAddress = accounts[0].receiveAddress?.toString();
-    const changeAddress = accounts[0].changeAddress?.toString();
-
-    if (!receiveAddress || !changeAddress) {
-      throw new Error('No receive or change address available');
-    }
-
-    // Get UTXOs for transaction creation
-    const stampingLogger = KaspaSDK.logger.child('stamping');
-    const utxos = await wallet.getUtxos(accountId);
-
-    // Get network ID
-    const networkId = wallet.network?.toString() || 'testnet-10';
-
-    // 1. Process file with the fixed optimal payload size (limited by transient mass)
-    // The 20KB limit comes from KIP-0013 transient mass calculation:
-    // transient_mass = tx_size × 4, max 100,000 → max tx_size = 25KB → max payload = 20KB
-    const estimationLogger = stampingLogger.child('estimation');
-    estimationLogger.info('Estimating stamping', {
-      fileName: file.name,
-      fileSizeKB: (file.size / 1024).toFixed(2),
-    });
-    estimationLogger.debug('Using optimal 20KB chunks limited by KIP-0013 transient mass');
-
-    const processingResult = await this.processFileForStamping(
-      file,
-      options.mode,
-      {
-        compression: options.compression ?? true,
-      },
-      wallet
-    ); // ✅ Pass wallet for private mode
-
-    estimationLogger.info('File will be split into chunks', {
-      chunkCount: processingResult.chunks.length,
-    });
-
-    // 2. Build unified envelopes for all chunks
-    const groupId = processingResult.chunks[0]?.groupId;
-    const enclave = options.mode === 'private' ? wallet.signingEnclave : undefined;
-    const envelopes: StampingEnvelope[] = [];
-
-    estimationLogger.debug('Building unified envelopes for estimation', { mode: options.mode });
-
-    for (const chunk of processingResult.chunks) {
-      const fullPayload: FullPayloadStructure = {
-        fileName: processingResult.originalFile.name,
-        chunkIndex: chunk.index,
-        totalChunks: processingResult.chunks.length,
-        digest: chunk.digest,
-        timestamp: new Date().toISOString(),
-        chunkData: chunk.data,
-      };
-
-      // Serialize payload
-      const serialized = serializePayload(fullPayload);
-
-      // Encrypt if private mode
-      let payload = serialized;
-      if (options.mode === 'private' && enclave) {
-        payload = await enclave.encryptWithWalletKey(serialized, groupId);
-      }
-
-      envelopes.push({
-        metadata: {
-          groupId,
-          mode: options.mode,
-        },
-        payload,
-      });
-    }
-
-    // 3. Estimate each envelope using Generator
-    let totalTransactions = 0;
-    let totalFees = 0n;
-    let totalMass = 0n;
-
-    estimationLogger.info('Running Generator estimation', { envelopeCount: envelopes.length });
-    const estimationStartTime = Date.now();
-
-    // ✅ PARALLELIZE ESTIMATION: Estimate all chunks concurrently
-    const estimationPromises = envelopes.map(async (envelope, i) => {
-      // Build payload from unified envelope
-      const payloadInfo = buildStampingPayload({
-        metadata: envelope.metadata,
-        chunkData: envelope.payload, // Unified payload (encrypted or plaintext)
-      });
-
-      // Estimate using Generator
-      // Note: We don't create an explicit output (only change + payload)
-      // This matches the actual stamping behavior in fast-file-stamping.ts
-      const estimation = await GeneratorTransactionService.estimateStampingTransaction({
-        recipient: receiveAddress,
-        changeAddress,
-        utxos,
-        payload: payloadInfo.payload,
-        networkId,
-        priorityFee: options.priorityFee,
-        amount: 0n, // No explicit output - only change + payload (matches actual stamping)
-      });
-
-      estimationLogger.debug('Envelope estimated', { envelope: i + 1, total: envelopes.length });
-      return estimation;
-    });
-
-    // Wait for all estimations to complete in parallel
-    const estimations = await Promise.all(estimationPromises);
-
-    // Aggregate results
-    for (const estimation of estimations) {
-      totalTransactions += estimation.transactionCount;
-      totalFees += estimation.totalFees;
-      totalMass += estimation.totalMass;
-    }
-
-    const estimationDuration = ((Date.now() - estimationStartTime) / 1000).toFixed(2);
-    estimationLogger.info('Parallel estimation complete', { durationSeconds: estimationDuration });
-
-    // Calculate costs
-    // Note: We don't send funds to ourselves anymore (no storage amount)
-    // We only pay network fees for the payload transactions
-    const storageAmountKAS = 0; // No storage amount - we don't create receive outputs
-    const estimatedFeesKAS = Number(totalFees) / 1e8;
-    const totalCostKAS = storageAmountKAS + estimatedFeesKAS;
-
-    // Calculate priority fee contribution
-    const priorityFeePerTx = Number(options.priorityFee);
-    const totalPriorityFeeSompi = BigInt(priorityFeePerTx * totalTransactions);
-    const totalPriorityFeeKAS = Number(totalPriorityFeeSompi) / 1e8;
-
-    estimationLogger.info('Estimation complete using official Kaspa WASM SDK', {
-      envelopeCount: envelopes.length,
-      totalTransactions,
-      priorityFeePerTxSompi: priorityFeePerTx,
-      priorityFeePerTxKAS: (priorityFeePerTx / 1e8).toFixed(8),
-      totalPriorityFeesSompi: totalPriorityFeeSompi.toString(),
-      totalPriorityFeesKAS: totalPriorityFeeKAS.toFixed(8),
-      totalFeesSompi: totalFees.toString(),
-      totalFeesKAS: estimatedFeesKAS.toFixed(8),
-      avgFeePerTxKAS: (Number(totalFees) / totalTransactions / 1e8).toFixed(8),
-      totalMass: totalMass.toString(),
-      avgMassPerTx: Number(totalMass) / totalTransactions,
-      storageAmountKAS: storageAmountKAS.toFixed(2),
-      totalCostKAS: totalCostKAS.toFixed(8),
-    });
-
-    return {
-      originalSize: processingResult.originalFile.size,
-      processedSize: processingResult.processing.totalProcessedSize,
-      chunkCount: processingResult.chunks.length,
-      estimatedTransactions: totalTransactions,
-      estimatedFeesSompi: totalFees,
-      estimatedFeesKAS,
-      estimatedMass: totalMass,
-      storageAmountKAS,
-      totalCostKAS,
-      processingResult,
-    };
-  }
-
-  /**
    * Stamp multiple artifacts (files and text) to the Kaspa blockchain in a single batched transaction chain
    *
    * This method processes multiple artifacts separately but executes all transactions in one chain
@@ -1261,13 +967,7 @@ export class KaspaSDK {
     }
 
     // 2. Use fast batched implementation with transaction chaining
-    return await stampFiles(
-      artifactProcessingResults,
-      wallet,
-      options,
-      () => this.getNetwork() as string,
-      options.priorityFee
-    );
+    return await stampFiles(artifactProcessingResults, wallet, options, options.priorityFee);
   }
 
   /**

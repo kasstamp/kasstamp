@@ -29,40 +29,59 @@ export interface AddressDiscoveryOptions {
 /**
  * Address Generator Service
  *
- * Minimaler Address-Generator ohne UTXO-Logik.
- * Erzeugt eine feste Anzahl an Empfangs- und Wechsel-Adressen und gibt sie zurück.
- * UTXO-Ermittlung erfolgt ausschließlich außerhalb (in getUtxos).
+ * CRITICAL: Derives addresses directly from mnemonic instead of using accountsCreateNewAddress().
+ * This prevents the WASM SDK from updating the account descriptor addresses, which causes them to change.
+ * Addresses are derived deterministically from the mnemonic, so they're always the same.
  */
 export class AddressDiscoveryService {
   private readonly wasmWallet: WasmWallet;
   private readonly accountId: string;
+  private readonly deriveAddress: (
+    accountIndex: number,
+    addressIndex: number,
+    isReceive: boolean
+  ) => Promise<Address>;
 
-  constructor(wasmWallet: WasmWallet, accountId: string) {
+  constructor(
+    wasmWallet: WasmWallet,
+    accountId: string,
+    deriveAddress: (
+      accountIndex: number,
+      addressIndex: number,
+      isReceive: boolean
+    ) => Promise<Address>
+  ) {
     this.wasmWallet = wasmWallet;
     this.accountId = accountId;
+    this.deriveAddress = deriveAddress;
   }
 
   /**
-   * Discover all addresses with UTXOs for the account
+   * Discover addresses starting from given indices for receive and change.
    *
-   * Iterative approach: Creates addresses in batches of 10, activates, and checks for UTXOs.
-   * If no UTXOs found, creates another batch of 10, up to maximum 100 addresses per type.
-   * Everything is done in a single discovery call.
+   * @param receiveStartIndex - Starting index for receive addresses (default: 0)
+   * @param changeStartIndex - Starting index for change addresses (default: 0)
+   * @param count - Number of addresses to derive per type (default: 10)
+   * @param options - Discovery options
    */
-  async discoverAddresses(options: AddressDiscoveryOptions = {}): Promise<AddressDiscoveryResult> {
+  async discoverAddresses(
+    receiveStartIndex: number = 0,
+    changeStartIndex: number = 0,
+    count: number = 10,
+    options: AddressDiscoveryOptions = {}
+  ): Promise<AddressDiscoveryResult> {
     const { onProgress } = options;
 
-    const GENERATE_COUNT = 20;
-
-    discoveryLogger.info(
-      `🔧 Starting address generation for account ${this.accountId.slice(0, 8)}`
+    discoveryLogger.debug(
+      `🔧 Discovering addresses for account ${this.accountId.slice(0, 8)}: ${count} addresses (receive from ${receiveStartIndex}, change from ${changeStartIndex})`
     );
 
     // Generate receive addresses
     const receiveResult = await this.discoverAddressesIteratively(
       0 as NewAddressKind,
       'receive',
-      GENERATE_COUNT,
+      receiveStartIndex,
+      count,
       onProgress
     );
 
@@ -70,7 +89,8 @@ export class AddressDiscoveryService {
     const changeResult = await this.discoverAddressesIteratively(
       1 as NewAddressKind,
       'change',
-      GENERATE_COUNT,
+      changeStartIndex,
+      count,
       onProgress
     );
 
@@ -91,36 +111,52 @@ export class AddressDiscoveryService {
   }
 
   /**
-   * Generate addresses: Simply creates a batch of addresses without UTXO checking
+   * Generate addresses: Derives addresses directly from mnemonic without calling accountsCreateNewAddress()
    *
-   * Pure address generator - no UTXO logic here.
-   * UTXO checking happens after discovery via recursive getUtxos() call.
+   * CRITICAL: This prevents the WASM SDK from updating the account descriptor addresses.
+   * Addresses are derived deterministically from mnemonic, so they're always consistent.
+   * UTXO checking happens after discovery via RPC calls.
+   *
+   * @param addressKind - 0 for receive, 1 for change
+   * @param typeName - 'receive' or 'change' (for logging)
+   * @param startIndex - Starting index for derivation
+   * @param count - Number of addresses to derive
+   * @param onProgress - Optional progress callback
    */
   private async discoverAddressesIteratively(
     addressKind: NewAddressKind,
     typeName: 'receive' | 'change',
+    startIndex: number,
     count: number,
     onProgress?: (type: 'receive' | 'change', index: number) => void
   ): Promise<DiscoveryResult> {
     const addresses = new Map<number, Address>();
+    const isReceive = addressKind === 0;
+    const accountIndex = 0; // We always use account index 0
 
-    discoveryLogger.debug(`📦 Generating ${count} ${typeName} addresses...`);
+    discoveryLogger.debug(
+      `📦 Deriving ${count} ${typeName} addresses starting from index ${startIndex}...`,
+      {
+        startIndex,
+        count,
+        note: 'Using direct derivation instead of accountsCreateNewAddress() to prevent account descriptor updates',
+      }
+    );
 
+    // Derive addresses starting from startIndex
     for (let i = 0; i < count; i++) {
+      const addressIndex = startIndex + i;
       try {
-        onProgress?.(typeName, i);
+        onProgress?.(typeName, addressIndex);
 
-        const addressResponse = await this.wasmWallet.accountsCreateNewAddress({
-          accountId: this.accountId,
-          addressKind,
-        });
+        // CRITICAL: Derive address directly from mnemonic instead of calling accountsCreateNewAddress()
+        // This prevents the WASM SDK from updating the account descriptor
+        const address = await this.deriveAddress(accountIndex, addressIndex, isReceive);
+        addresses.set(addressIndex, address);
 
-        const address = addressResponse.address;
-        addresses.set(i, address);
-
-        discoveryLogger.debug(`📝 Created ${typeName}[${i}]: ${address.toString()}`);
+        // discoveryLogger.debug(`📝 Derived ${typeName}[${addressIndex}]: ${address.toString()}`);
       } catch (error) {
-        discoveryLogger.warn(`⚠️ Error creating ${typeName}[${i}]:`, error as Error);
+        discoveryLogger.warn(`⚠️ Error deriving ${typeName}[${addressIndex}]:`, error as Error);
         break; // Stop on error
       }
     }

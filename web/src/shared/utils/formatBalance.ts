@@ -62,11 +62,36 @@ export function formatExactAmount(amount: string | number): string {
 
 /**
  * Format balance for compact display (e.g., in header)
- * @param balance - The balance value as string or number
- * @param maxDecimals - Maximum decimal places for compact display (default: 4)
+ *
+ * Converts sompi to KAS and displays the full value, removing trailing zeros.
+ *
+ * @param balance - The balance value in sompi (as string or number)
  * @returns Formatted balance string with KAS suffix
+ *
+ * @example
+ * formatBalanceCompact('4798980677') // "47.98980677 KAS"
+ * formatBalanceCompact('100000000') // "1 KAS"
+ * formatBalanceCompact('1234567') // "0.01234567 KAS"
  */
-export function formatBalanceCompact(balance: string | number, maxDecimals: number = 4): string {
-  const formatted = formatBalance(balance, maxDecimals);
+export function formatBalanceCompact(balance: string | number): string {
+  if (!balance || balance === '0' || balance === 0) {
+    return '0 KAS';
+  }
+
+  // Convert sompi to KAS (divide by 1e8)
+  // Since sompi is an integer, KAS will have up to 8 decimal places
+  const balanceNum = typeof balance === 'number' ? balance : Number(balance);
+  const kasValue = balanceNum / 1e8;
+
+  // Convert to string to preserve all decimal places
+  let formatted = kasValue.toString();
+
+  // Remove trailing zeros only from decimal places (not from whole numbers)
+  // This regex only matches if there's a decimal point, so "10" stays "10" and doesn't become "1"
+  if (formatted.includes('.')) {
+    formatted = formatted.replace(/0+$/, ''); // Remove trailing zeros
+    formatted = formatted.replace(/\.$/, ''); // Remove decimal point if nothing left after it
+  }
+
   return `${formatted} KAS`;
 }

@@ -16,11 +16,6 @@ const NetworkId = {
   },
 };
 
-// Mock initKaspaWasm
-async function initKaspaWasm() {
-  return Promise.resolve();
-}
-
 // Mock getKaspaWasm
 async function getKaspaWasm() {
   return {
@@ -181,19 +176,8 @@ class UtxoEntryReference {
   constructor() {}
 }
 
-// Mock utility functions
-function getUtxoProcessor() {
-  return new UtxoProcessor();
-}
-
-function getUtxoContext() {
-  return new UtxoContext();
-}
-
 // CommonJS exports for Jest
 module.exports = {
-  initKaspaWasm,
-  getKaspaWasm,
   NetworkId,
   PendingTransaction,
   PrivateKey,
@@ -208,6 +192,4 @@ module.exports = {
   UtxoProcessor,
   UtxoEntry,
   UtxoEntryReference,
-  getUtxoProcessor,
-  getUtxoContext,
 };

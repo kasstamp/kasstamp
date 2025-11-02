@@ -317,10 +317,10 @@ export async function stampFile(
     stampingLogger.info(`💸 Starting stamping for ${file.name}...`);
 
     // Unlock wallet for signing
-    if (wallet.locked) {
+    if (wallet.signingEnclave.isLocked()) {
       try {
         await wallet.unlockFromPassword(walletSecret);
-        if (wallet.locked) {
+        if (wallet.signingEnclave.isLocked()) {
           throw new Error('Failed to unlock wallet');
         }
       } catch (error) {
@@ -380,10 +380,10 @@ export async function stampText(
     stampingLogger.info(`💸 Starting text stamping...`);
 
     // Unlock wallet for signing
-    if (wallet.locked) {
+    if (wallet.signingEnclave.isLocked()) {
       try {
         await wallet.unlockFromPassword(walletSecret);
-        if (wallet.locked) {
+        if (wallet.signingEnclave.isLocked()) {
           throw new Error('Failed to unlock wallet');
         }
       } catch (error) {
@@ -452,13 +452,13 @@ export async function stampMultipleArtifacts(
     stampingLogger.info('🔐 Enclave status:', enclaveStatus);
 
     // Unlock wallet for signing (if locked)
-    if (wallet.locked) {
+    if (wallet.signingEnclave.isLocked()) {
       if (!walletSecret) {
         throw new Error('Wallet is locked and no password provided');
       }
       try {
         await wallet.unlockFromPassword(walletSecret);
-        if (wallet.locked) {
+        if (wallet.signingEnclave.isLocked()) {
           throw new Error('Failed to unlock wallet');
         }
       } catch (error) {
