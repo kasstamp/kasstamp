@@ -4,6 +4,15 @@ import { NetworkId } from '@kasstamp/kaspa_wasm_sdk/kaspa.js';
 export type StampingMode = 'public' | 'private';
 
 /**
+ * Raw receipt JSON structure (as decoded from JSON/Base64)
+ * This represents the receipt before deserialization, where network can be a string or object.
+ * The SDK will deserialize this to StampingReceipt with NetworkId instance.
+ */
+export type RawReceiptJson = Omit<StampingReceipt, 'network'> & {
+  network: string | { type: number; suffix?: number; id: string }; // Network string (e.g., "mainnet") or object {type: 0, id: "mainnet"} - will be deserialized by SDK
+};
+
+/**
  * Receipt structure for file reconstruction
  *
  * PRIVACY NOTE:
@@ -38,7 +47,7 @@ export interface StampingReceipt {
 
   // Cost & network
   totalCostKAS: number;
-  network?: NetworkId;
+  network: NetworkId;
   walletAddress?: string;
 }
 

@@ -7,6 +7,7 @@ export type {
   StampingResult,
   FullPayloadStructure,
   StampingReceipt,
+  RawReceiptJson,
   ReconstructionResult,
   ReconstructionProgressCallback,
 } from './types';
@@ -29,3 +30,6 @@ export { reconstructFileFromReceipt, downloadReconstructedFile } from './reconst
 
 // Export validation functionality
 export { validateReceipt } from './validation';
+
+// Export utility functions
+export { deserializeReceipt, restoreNetworkId } from './utils/receipt-deserializer';

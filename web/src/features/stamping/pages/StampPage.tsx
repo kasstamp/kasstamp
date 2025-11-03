@@ -7,7 +7,7 @@ import { formatExactAmount } from '@/shared/utils/formatBalance';
 import { useWallet } from '@/shared/hooks/useWallet';
 import { pageLogger } from '@/core/utils/logger';
 import { stampMultipleArtifacts } from '../services';
-import type { StampingReceipt } from '@kasstamp/sdk';
+import type { StampingReceipt, RawReceiptJson } from '@kasstamp/sdk';
 import {
   useEstimation,
   useFileUpload,
@@ -76,13 +76,50 @@ export default function StampPage() {
   const receiptPreview = useReceiptPreview();
   const qrScanner = useQRScanner();
 
+  // Helper function to handle decrypt errors with connection state awareness
+  const handleDecryptError = useCallback(
+    (errorMsg: string): void => {
+      // Check for specific wallet errors
+      if (errorMsg.includes('locked') || errorMsg.includes('Wallet is locked')) {
+        // Wallet locked - handled separately with wallet listing
+        return;
+      } else if (
+        errorMsg.includes('Wallet required') ||
+        errorMsg.includes('no wallet') ||
+        errorMsg.includes('Wallet connection required')
+      ) {
+        // No wallet
+        setError('Wallet required to view private receipt. Please connect your wallet first.');
+      } else if (
+        errorMsg.includes('SDK not initialized') ||
+        errorMsg.includes('Please connect to network') ||
+        errorMsg.includes('Connecting to network') ||
+        errorMsg.includes('Connecting to the Kaspa Network')
+      ) {
+        // SDK not initialized or connecting - check service state directly for most up-to-date info
+        const serviceState = walletService.getState();
+        const isConnecting = serviceState.isConnecting || walletState.isConnecting;
+        if (isConnecting || errorMsg.includes('Connecting')) {
+          setError('Connecting to the Kaspa Network, please wait...');
+        } else {
+          setError(`Failed to decrypt private receipt: ${errorMsg}`);
+        }
+      } else {
+        // Generic error
+        setError(`Failed to decrypt private receipt: ${errorMsg}`);
+      }
+    },
+    [walletState.isConnecting]
+  );
+
   // Helper function to decode receipt from URL or JSON
-  const decodeReceipt = useCallback((data: string): StampingReceipt => {
+  // Returns RawReceiptJson - SDK will handle deserialization to StampingReceipt
+  const decodeReceipt = useCallback((data: string): RawReceiptJson => {
     // First try to parse as regular JSON
     try {
-      const jsonReceipt = JSON.parse(data) as StampingReceipt;
+      const receiptJson = JSON.parse(data);
       pageLogger.info('📄 Receipt loaded as JSON from KAS file');
-      return jsonReceipt;
+      return receiptJson;
     } catch {
       // If JSON parsing fails, check if it's a URL-based receipt
       let base64Data: string | null = null;
@@ -130,10 +167,10 @@ export default function StampPage() {
 
           // Decompress with pako
           const decompressed = pako.inflate(bytes, { to: 'string' });
-          const receipt = JSON.parse(decompressed) as StampingReceipt;
+          const receiptJson = JSON.parse(decompressed);
 
           pageLogger.info('📄 Receipt loaded from KAS file URL');
-          return receipt;
+          return receiptJson;
         } catch (urlError) {
           pageLogger.error('❌ Failed to decode URL-based receipt:', urlError as Error);
           throw new Error('Invalid URL-based receipt format');
@@ -184,23 +221,15 @@ export default function StampPage() {
                     'No wallet found. Please create or import a wallet to view this private receipt.',
                   );
                 }
-              } else if (
-                errorMsg.includes('Wallet required') ||
-                errorMsg.includes('no wallet') ||
-                errorMsg.includes('Wallet connection required')
-              ) {
-                // No wallet - show error with button
-                setError(
-                  'Wallet required to view private receipt. Please connect your wallet first.',
-                );
               } else {
-                setError(`Failed to decrypt private receipt: ${errorMsg}`);
+                handleDecryptError(errorMsg);
               }
               return; // Don't open the encrypted receipt
             }
           } else {
             // Public receipt - open directly
-            receiptPreview.openReceipt(receipt);
+            // SDK will handle deserialization internally
+            receiptPreview.openReceipt(receipt as StampingReceipt);
           }
 
           // Clean up URL
@@ -287,8 +316,9 @@ export default function StampPage() {
             const parsed = decodeReceipt(text);
 
             // Auto-decrypt if it's a private receipt
-            try {
-              const decrypted = await receiptPreview.decryptReceipt(parsed);
+            if (parsed.privacy === 'private' || parsed.encrypted === true) {
+              try {
+                const decrypted = await receiptPreview.decryptReceipt(parsed);
               receiptPreview.openReceipt(decrypted);
               // Ensure drag state is reset after successful processing
               fileUpload.resetDragState();
@@ -310,22 +340,17 @@ export default function StampPage() {
                     'No wallet found. Please create or import a wallet to view this private receipt.',
                   );
                 }
-              } else if (
-                errorMsg.includes('Wallet required') ||
-                errorMsg.includes('no wallet') ||
-                errorMsg.includes('Wallet connection required')
-              ) {
-                // No wallet - show error with button
-                setError(
-                  'Wallet required to view private receipt. Please connect your wallet first.',
-                );
               } else {
-                setError(`Failed to decrypt private receipt: ${errorMsg}`);
+                handleDecryptError(errorMsg);
               }
               // Ensure drag state is reset even on decrypt error
               fileUpload.resetDragState();
             }
-          } catch {
+          } else {
+            // Public receipt - pass raw JSON to SDK, it will handle deserialization
+            receiptPreview.openReceipt(parsed);
+          }
+        } catch {
             setError('Invalid .kas receipt file (parse failed)');
             // Ensure drag state is reset even on parse error
             fileUpload.resetDragState();
@@ -564,35 +589,35 @@ export default function StampPage() {
               const parsed = decodeReceipt(textContent);
 
               // Auto-decrypt if it's a private receipt
-              try {
-                const decrypted = await receiptPreview.decryptReceipt(parsed);
-                receiptPreview.openReceipt(decrypted);
-              } catch (decryptError) {
-                const errorMsg = (decryptError as Error).message;
+              if (parsed.privacy === 'private' || parsed.encrypted === true) {
+                try {
+                  const decrypted = await receiptPreview.decryptReceipt(parsed);
+                  receiptPreview.openReceipt(decrypted);
+                } catch (decryptError) {
+                  const errorMsg = (decryptError as Error).message;
 
-                // Check for specific wallet errors
-                if (errorMsg.includes('locked') || errorMsg.includes('Wallet is locked')) {
-                  // Check if user has wallets
-                  const wallets = await walletService.listWallets();
-                  if (wallets.length > 0) {
-                    // User has wallets but they're locked - show error with link
-                    setError(
-                      'Wallet is locked. Please unlock your wallet to view this private receipt.',
-                    );
+                  // Check for specific wallet errors
+                  if (errorMsg.includes('locked') || errorMsg.includes('Wallet is locked')) {
+                    // Check if user has wallets
+                    const wallets = await walletService.listWallets();
+                    if (wallets.length > 0) {
+                      // User has wallets but they're locked - show error with link
+                      setError(
+                        'Wallet is locked. Please unlock your wallet to view this private receipt.',
+                      );
+                    } else {
+                      // No wallets - show error with button
+                      setError(
+                        'No wallet found. Please create or import a wallet to view this private receipt.',
+                      );
+                    }
                   } else {
-                    // No wallets - show error with button
-                    setError(
-                      'No wallet found. Please create or import a wallet to view this private receipt.',
-                    );
+                    handleDecryptError(errorMsg);
                   }
-                } else if (errorMsg.includes('Wallet required') || errorMsg.includes('no wallet')) {
-                  // No wallet - show error with button
-                  setError(
-                    'Wallet required to view private receipt. Please connect your wallet first.',
-                  );
-                } else {
-                  setError(`Failed to decrypt private receipt: ${errorMsg}`);
                 }
+              } else {
+                // Public receipt - pass raw JSON to SDK, it will handle deserialization
+                receiptPreview.openReceipt(parsed);
               }
             } catch {
               setError('Invalid .kas receipt file (parse failed)');
@@ -728,16 +753,8 @@ export default function StampPage() {
                         'No wallet found. Please create or import a wallet to view this private receipt.',
                       );
                     }
-                  } else if (
-                    errorMsg.includes('Wallet required') ||
-                    errorMsg.includes('no wallet')
-                  ) {
-                    // No wallet - show error with button
-                    setError(
-                      'Wallet required to view private receipt. Please connect your wallet first.',
-                    );
                   } else {
-                    setError(`Failed to decrypt private receipt: ${errorMsg}`);
+                    handleDecryptError(errorMsg);
                   }
                 }
               })();

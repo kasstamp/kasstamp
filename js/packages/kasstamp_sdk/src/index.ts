@@ -11,4 +11,4 @@ export type { SimpleWalletNotificationCallback } from '@kasstamp/wallet';
 export { TransactionMonitoringService } from '@kasstamp/wallet';
 export type { ITransactionRecord, IAccountDescriptor } from '@kasstamp/kaspa_wasm_sdk';
 
-export type { StampingReceipt, ProcessingResult } from '@kasstamp/stamping';
+export type { StampingReceipt, RawReceiptJson, ProcessingResult } from '@kasstamp/stamping';
