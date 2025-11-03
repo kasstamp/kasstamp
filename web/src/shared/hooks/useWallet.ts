@@ -98,6 +98,7 @@ export function useWallet(): [WalletState, WalletActions] {
       ...prevState,
       isConnected: serviceState.isConnected,
       isInitialized: serviceState.isInitialized,
+      isConnecting: serviceState.isConnecting ?? false,
       currentNetwork: serviceState.currentNetwork.toString(),
       hasWallet: serviceState.hasWallet,
       walletLocked: serviceState.walletLocked,

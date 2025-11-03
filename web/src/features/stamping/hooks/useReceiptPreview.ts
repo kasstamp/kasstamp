@@ -8,7 +8,7 @@ import { useState, useCallback, useEffect } from 'react';
 import { pageLogger } from '@/core/utils/logger';
 import { walletService } from '@/features/wallet/services';
 import { useWallet } from '@/shared/hooks/useWallet';
-import type { StampingReceipt } from '@kasstamp/sdk';
+import type { StampingReceipt, RawReceiptJson } from '@kasstamp/sdk';
 import { isImageFile, isTextFile } from '../utils/fileHelpers';
 
 export function useReceiptPreview() {
@@ -26,138 +26,159 @@ export function useReceiptPreview() {
   const [isSDKLoading, setIsSDKLoading] = useState(false);
 
   const decryptReceipt = useCallback(
-    async (encryptedReceipt: StampingReceipt): Promise<StampingReceipt> => {
+    async (encryptedReceipt: RawReceiptJson): Promise<StampingReceipt> => {
       const sdk = walletService.getSDK();
       if (!sdk) {
+        // Check if SDK is currently connecting - check service state directly for most up-to-date info
+        const serviceState = walletService.getState();
+        if (serviceState.isConnecting || walletState.isConnecting) {
+          throw new Error('Connecting to the Kaspa Network, please wait...');
+        }
         throw new Error('SDK not initialized. Please connect to network first.');
       }
 
       const wallet = walletService.getCurrentWallet();
       return await sdk.decryptReceipt(encryptedReceipt, wallet);
     },
-    []
+    [walletState.isConnecting]
   );
 
-  const loadImagePreview = useCallback(async (receiptObj: StampingReceipt) => {
-    if (!receiptObj?.fileName || !isImageFile(receiptObj.fileName)) {
-      setKasImagePreview(null);
-      return;
-    }
-
-    pageLogger.info('🖼️ Loading image preview from receipt...');
-    setKasImageLoading(true);
-    setKasImagePreview(null);
-
-    try {
-      const sdk = walletService.getSDK();
-      if (!sdk) {
-        throw new Error('SDK not initialized');
-      }
-
-      const wallet = walletService.getCurrentWallet();
-
-      // Check if wallet is available and unlocked for private receipts
-      if (receiptObj.privacy === 'private') {
-        if (!wallet) {
-          throw new Error('Wallet required to load preview of private receipt');
-        }
-        if (wallet.signingEnclave.isLocked()) {
-          throw new Error('Wallet is locked. Please unlock your wallet to load the preview.');
-        }
-        pageLogger.debug('Wallet status:', {
-          locked: wallet.signingEnclave.isLocked(),
-          hasEnclave: !!wallet.signingEnclave,
-          enclaveLocked: wallet.signingEnclave?.isLocked(),
-        });
-      }
-
-      const result = await sdk.reconstructFile(receiptObj, wallet, (progress) => {
-        const percentage =
-          progress.total > 0 ? Math.round((progress.current / progress.total) * 100) : 0;
-        pageLogger.info(`📥 Image download progress: ${percentage}%`);
-        setKasDownloadPct(percentage);
-        setKasDownloadText(`Downloading image... ${percentage}%`);
-      });
-
-      if (result && result.data) {
-        // Convert Uint8Array to BlobPart for Blob compatibility
-        const blob = new Blob([result.data as BlobPart], { type: 'application/octet-stream' });
-        const url = URL.createObjectURL(blob);
-        setKasImagePreview(url);
-        pageLogger.info('✅ Image preview loaded successfully');
-      } else {
-        pageLogger.warn('⚠️ Failed to load image preview');
+  const loadImagePreview = useCallback(
+    async (receiptObj: RawReceiptJson) => {
+      if (!receiptObj?.fileName || !isImageFile(receiptObj.fileName)) {
         setKasImagePreview(null);
+        return;
       }
-    } catch (error) {
-      pageLogger.error('❌ Error loading image preview:', error as Error);
+
+      pageLogger.info('🖼️ Loading image preview from receipt...');
+      setKasImageLoading(true);
       setKasImagePreview(null);
-    } finally {
-      setKasImageLoading(false);
-      setKasDownloadPct(0);
-      setKasDownloadText('');
-    }
-  }, []);
 
-  const loadTextPreview = useCallback(async (receiptObj: StampingReceipt) => {
-    if (!receiptObj?.fileName || !isTextFile(receiptObj.fileName)) {
-      setKasTextPreview(null);
-      return;
-    }
-
-    pageLogger.info('📄 Loading text preview from receipt...');
-    setKasTextLoading(true);
-    setKasTextPreview(null);
-
-    try {
-      const sdk = walletService.getSDK();
-      if (!sdk) {
-        throw new Error('SDK not initialized');
-      }
-
-      const wallet = walletService.getCurrentWallet();
-
-      // Check if wallet is available and unlocked for private receipts
-      if (receiptObj.privacy === 'private') {
-        if (!wallet) {
-          throw new Error('Wallet required to load preview of private receipt');
+      try {
+        const sdk = walletService.getSDK();
+        if (!sdk) {
+          // Check if SDK is currently connecting - check service state directly
+          const serviceState = walletService.getState();
+          if (serviceState.isConnecting || walletState.isConnecting) {
+            throw new Error('Connecting to the Kaspa Network, please wait...');
+          }
+          throw new Error('SDK not initialized');
         }
-        if (wallet.signingEnclave.isLocked()) {
-          throw new Error('Wallet is locked. Please unlock your wallet to load the preview.');
+
+        const wallet = walletService.getCurrentWallet();
+
+        // Check if wallet is available and unlocked for private receipts
+        if (receiptObj.privacy === 'private') {
+          if (!wallet) {
+            throw new Error('Wallet required to load preview of private receipt');
+          }
+          if (wallet.signingEnclave.isLocked()) {
+            throw new Error('Wallet is locked. Please unlock your wallet to load the preview.');
+          }
+          pageLogger.debug('Wallet status:', {
+            locked: wallet.signingEnclave.isLocked(),
+            hasEnclave: !!wallet.signingEnclave,
+            enclaveLocked: wallet.signingEnclave?.isLocked(),
+          });
         }
-        pageLogger.debug('Wallet status:', {
-          locked: wallet.signingEnclave.isLocked(),
-          hasEnclave: !!wallet.signingEnclave,
-          enclaveLocked: wallet.signingEnclave?.isLocked(),
+
+        const result = await sdk.reconstructFile(receiptObj, wallet, (progress) => {
+          const percentage =
+            progress.total > 0 ? Math.round((progress.current / progress.total) * 100) : 0;
+          pageLogger.info(`📥 Image download progress: ${percentage}%`);
+          setKasDownloadPct(percentage);
+          setKasDownloadText(`Downloading image... ${percentage}%`);
         });
+
+        if (result && result.data) {
+          // Convert Uint8Array to BlobPart for Blob compatibility
+          const blob = new Blob([result.data as BlobPart], { type: 'application/octet-stream' });
+          const url = URL.createObjectURL(blob);
+          setKasImagePreview(url);
+          pageLogger.info('✅ Image preview loaded successfully');
+        } else {
+          pageLogger.warn('⚠️ Failed to load image preview');
+          setKasImagePreview(null);
+        }
+      } catch (error) {
+        pageLogger.error('❌ Error loading image preview:', error as Error);
+        setKasImagePreview(null);
+      } finally {
+        setKasImageLoading(false);
+        setKasDownloadPct(0);
+        setKasDownloadText('');
       }
+    },
+    [walletState.isConnecting]
+  );
 
-      const result = await sdk.reconstructFile(receiptObj, wallet, (progress) => {
-        const percentage =
-          progress.total > 0 ? Math.round((progress.current / progress.total) * 100) : 0;
-        pageLogger.info(`📥 Text download progress: ${percentage}%`);
-        setKasDownloadPct(percentage);
-        setKasDownloadText(`Downloading text... ${percentage}%`);
-      });
-
-      if (result && result.data) {
-        const text = new TextDecoder().decode(result.data);
-        const preview = text.length > 1000 ? text.slice(0, 1000) + '...' : text;
-        setKasTextPreview(preview);
-        pageLogger.info('✅ Text preview loaded successfully');
-      } else {
-        pageLogger.warn('⚠️ Failed to load text preview');
+  const loadTextPreview = useCallback(
+    async (receiptObj: RawReceiptJson) => {
+      if (!receiptObj?.fileName || !isTextFile(receiptObj.fileName)) {
         setKasTextPreview(null);
+        return;
       }
-    } catch (error) {
-      pageLogger.error('❌ Error loading text preview:', error as Error);
+
+      pageLogger.info('📄 Loading text preview from receipt...');
+      setKasTextLoading(true);
       setKasTextPreview(null);
-    } finally {
-      setKasTextLoading(false);
-      setKasDownloadPct(0);
-      setKasDownloadText('');
-    }
-  }, []);
+
+      try {
+        const sdk = walletService.getSDK();
+        if (!sdk) {
+          // Check if SDK is currently connecting - check service state directly
+          const serviceState = walletService.getState();
+          if (serviceState.isConnecting || walletState.isConnecting) {
+            throw new Error('Connecting to the Kaspa Network, please wait...');
+          }
+          throw new Error('SDK not initialized');
+        }
+
+        const wallet = walletService.getCurrentWallet();
+
+        // Check if wallet is available and unlocked for private receipts
+        if (receiptObj.privacy === 'private') {
+          if (!wallet) {
+            throw new Error('Wallet required to load preview of private receipt');
+          }
+          if (wallet.signingEnclave.isLocked()) {
+            throw new Error('Wallet is locked. Please unlock your wallet to load the preview.');
+          }
+          pageLogger.debug('Wallet status:', {
+            locked: wallet.signingEnclave.isLocked(),
+            hasEnclave: !!wallet.signingEnclave,
+            enclaveLocked: wallet.signingEnclave?.isLocked(),
+          });
+        }
+
+        const result = await sdk.reconstructFile(receiptObj, wallet, (progress) => {
+          const percentage =
+            progress.total > 0 ? Math.round((progress.current / progress.total) * 100) : 0;
+          pageLogger.info(`📥 Text download progress: ${percentage}%`);
+          setKasDownloadPct(percentage);
+          setKasDownloadText(`Downloading text... ${percentage}%`);
+        });
+
+        if (result && result.data) {
+          const text = new TextDecoder().decode(result.data);
+          const preview = text.length > 1000 ? text.slice(0, 1000) + '...' : text;
+          setKasTextPreview(preview);
+          pageLogger.info('✅ Text preview loaded successfully');
+        } else {
+          pageLogger.warn('⚠️ Failed to load text preview');
+          setKasTextPreview(null);
+        }
+      } catch (error) {
+        pageLogger.error('❌ Error loading text preview:', error as Error);
+        setKasTextPreview(null);
+      } finally {
+        setKasTextLoading(false);
+        setKasDownloadPct(0);
+        setKasDownloadText('');
+      }
+    },
+    [walletState.isConnecting]
+  );
 
   // Process pending receipt when SDK becomes available
   useEffect(() => {
@@ -173,8 +194,9 @@ export function useReceiptPreview() {
   }, [walletState.isConnected, pendingReceipt, loadImagePreview, loadTextPreview]);
 
   const openReceipt = useCallback(
-    (receipt: StampingReceipt) => {
-      setKasReceiptObj(receipt);
+    (receipt: RawReceiptJson | StampingReceipt) => {
+      // Store receipt - if it's RawReceiptJson, it will be deserialized by SDK when needed
+      setKasReceiptObj(receipt as StampingReceipt);
       setKasDownloadPct(0);
       setKasDownloadText('');
       setKasDownloading(false);
@@ -188,13 +210,14 @@ export function useReceiptPreview() {
       if (walletState.isConnected) {
         pageLogger.info('🔄 SDK ready, loading previews immediately...');
         setIsSDKLoading(false);
+        // Pass raw receipt - SDK will handle deserialization
         void loadImagePreview(receipt);
         void loadTextPreview(receipt);
       } else {
         // SDK not ready, store as pending
         pageLogger.info('⏳ SDK not ready, storing receipt as pending...');
         setIsSDKLoading(true);
-        setPendingReceipt(receipt);
+        setPendingReceipt(receipt as StampingReceipt);
       }
     },
     [loadImagePreview, loadTextPreview, walletState.isConnected]

@@ -8,6 +8,8 @@
  * - Suspicious patterns
  */
 
+import { NetworkId } from '@kasstamp/kaspa_wasm_sdk/kaspa.js';
+
 export interface ValidationResult {
   valid: boolean;
   errors: string[];
@@ -49,18 +51,23 @@ const DANGEROUS_EXTENSIONS = [
 
 /**
  * Suspicious patterns in strings that might indicate injection attacks
+ * Patterns are optimized to prevent ReDoS (Regular Expression Denial of Service) attacks
+ * - Using word boundaries (\b) to anchor patterns and prevent backtracking
+ * - Using bounded quantifiers with explicit limits
+ * - Avoiding nested quantifiers that can cause exponential backtracking
+ * - Placing anchors (=) before optional parts to prevent ambiguous matching
  */
 const SUSPICIOUS_PATTERNS = [
-  /<script[^>]*>/i, // Script tags
-  /javascript:/i, // JavaScript protocol
-  /on\w+\s*=/i, // Event handlers
-  /data:text\/html/i, // Data URI HTML
-  /vbscript:/i, // VBScript protocol
-  /<iframe[^>]*>/i, // IFrame tags
-  /<object[^>]*>/i, // Object tags
-  /<embed[^>]*>/i, // Embed tags
-  /\.\.[\\/]/, // Path traversal
-  /[<>'"]/, // HTML special chars (basic check)
+  /<script\b/i, // Script tags (word boundary prevents backtracking)
+  /javascript:/i, // JavaScript protocol (simple literal, no backtracking)
+  /\bon\w{1,20}=\s*/i, // Event handlers (put = before optional spaces to prevent backtracking)
+  /data:text\/html/i, // Data URI HTML (simple literal, no backtracking)
+  /vbscript:/i, // VBScript protocol (simple literal, no backtracking)
+  /<iframe\b/i, // IFrame tags (word boundary prevents backtracking)
+  /<object\b/i, // Object tags (word boundary prevents backtracking)
+  /<embed\b/i, // Embed tags (word boundary prevents backtracking)
+  /\.\.[\\/]/, // Path traversal (no quantifiers, safe)
+  /[<>'"]/, // HTML special chars (character class, no backtracking)
 ];
 
 /**
@@ -98,6 +105,8 @@ function validateStringField(
   }
 
   // Check for suspicious patterns
+  // Note: We validate length first (above) to limit input size and prevent ReDoS attacks
+  // The patterns are also optimized to avoid backtracking issues
   for (const pattern of SUSPICIOUS_PATTERNS) {
     if (pattern.test(value)) {
       warnings.push(`${fieldName} contains suspicious pattern: ${pattern.source}`);
@@ -326,11 +335,11 @@ export function validateReceipt(receipt: unknown): ValidationResult {
     }
   }
 
-  // Validate network (optional)
-  if (r.network !== undefined) {
-    const networkValidation = validateStringField(r.network, 'network', 50);
-    errors.push(...networkValidation.errors);
-    warnings.push(...networkValidation.warnings);
+  // Validate network (required)
+  if (!r.network) {
+    errors.push('Receipt network is required');
+  } else if (!(r.network instanceof NetworkId)) {
+    errors.push('Receipt network must be a NetworkId instance');
   }
 
   // Validate walletAddress (optional)

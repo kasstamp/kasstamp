@@ -106,6 +106,7 @@ export class WalletService {
     return {
       isConnected: !!this.kaspaSDK && this.kaspaSDK.isReady(),
       isInitialized: !!this.kaspaSDK,
+      isConnecting: this.isConnecting,
       currentNetwork: this.kaspaSDK?.getNetwork() || 'testnet-10',
       hasWallet: !!this.currentWallet,
       walletLocked: this.currentWallet?.signingEnclave.isLocked() ?? true,
