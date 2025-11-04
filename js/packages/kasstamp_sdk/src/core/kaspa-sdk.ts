@@ -10,12 +10,14 @@ import {
   TransactionMonitoringService,
 } from '@kasstamp/wallet';
 import {
+  deserializeReceipt,
   downloadReconstructedFile,
   type FullPayloadStructure,
   prepareFileForPrivateMode,
   prepareFileForPublicMode,
   type ProcessingOptions,
   type ProcessingResult,
+  type RawReceiptJson,
   reconstructFileFromReceipt,
   type ReconstructionProgressCallback,
   type ReconstructionResult,
@@ -705,11 +707,13 @@ export class KaspaSDK {
    * ```
    */
   async reconstructFile(
-    receipt: StampingReceipt,
+    receipt: RawReceiptJson,
     wallet: SimpleWallet | null,
     onProgress?: ReconstructionProgressCallback
   ): Promise<ReconstructionResult> {
-    return await reconstructFileFromReceipt(receipt, wallet, onProgress);
+    // Deserialize receipt first (handles NetworkId restoration from JSON)
+    const deserializedReceipt = deserializeReceipt(receipt);
+    return await reconstructFileFromReceipt(deserializedReceipt, wallet, onProgress);
   }
 
   /**
@@ -727,15 +731,16 @@ export class KaspaSDK {
    * This automatically decrypts the transaction IDs in a private receipt,
    * making it ready for display or file reconstruction.
    *
-   * @param receipt - The receipt to decrypt (can be public or private)
+   * @param receipt - The receipt to decrypt (can be public or private, raw JSON or StampingReceipt)
    * @param wallet - Wallet required for private receipts (optional for public)
    * @returns Decrypted receipt with plaintext transaction IDs
    *
    * @throws Error if wallet is missing/locked or decryption fails
    *
    * @example
-   * // Decrypt a private receipt
-   * const decrypted = await sdk.decryptReceipt(encryptedReceipt, wallet);
+   * // Decrypt a private receipt (raw JSON from URL/QR code)
+   * const rawReceipt = JSON.parse(decompressedData);
+   * const decrypted = await sdk.decryptReceipt(rawReceipt, wallet);
    * console.log(decrypted.transactionIds); // Now an array
    *
    * @example
@@ -743,15 +748,18 @@ export class KaspaSDK {
    * const publicReceipt = await sdk.decryptReceipt(receipt, null);
    */
   async decryptReceipt(
-    receipt: StampingReceipt,
+    receipt: RawReceiptJson,
     wallet: SimpleWallet | null
   ): Promise<StampingReceipt> {
     const decryptLogger = KaspaSDK.logger.child('decrypt');
-    decryptLogger.info('Attempting to decrypt receipt', { receiptId: receipt.id });
+
+    // Deserialize receipt first (handles NetworkId restoration from JSON)
+    const deserializedReceipt = deserializeReceipt(receipt);
+    decryptLogger.info('Attempting to decrypt receipt', { receiptId: deserializedReceipt.id });
 
     // ✅ VALIDATE RECEIPT BEFORE PROCESSING
     decryptLogger.debug('Validating receipt structure');
-    const validationResult = validateReceipt(receipt);
+    const validationResult = validateReceipt(deserializedReceipt);
 
     // Log warnings
     if (validationResult.warnings.length > 0) {
@@ -766,14 +774,14 @@ export class KaspaSDK {
 
     decryptLogger.debug('Receipt validation passed');
     decryptLogger.debug('Receipt details', {
-      privacy: receipt.privacy,
-      transactionIdsEncrypted: receipt.transactionIdsEncrypted,
+      privacy: deserializedReceipt.privacy,
+      transactionIdsEncrypted: deserializedReceipt.transactionIdsEncrypted,
     });
 
     // If not private or already decrypted, return as-is
-    if (receipt.privacy !== 'private' || !receipt.transactionIdsEncrypted) {
+    if (deserializedReceipt.privacy !== 'private' || !deserializedReceipt.transactionIdsEncrypted) {
       decryptLogger.info('Receipt is public or already decrypted');
-      return receipt;
+      return deserializedReceipt;
     }
 
     // Need wallet to decrypt
@@ -789,7 +797,7 @@ export class KaspaSDK {
       throw new Error('Wallet is corrupt, please re-import your wallet.');
     }
 
-    if (!receipt.groupId) {
+    if (!deserializedReceipt.groupId) {
       throw new Error('Receipt missing groupId - cannot decrypt');
     }
 
@@ -797,12 +805,12 @@ export class KaspaSDK {
       decryptLogger.info('Decrypting transaction IDs');
 
       // Decrypt transaction IDs
-      const encryptedTxIds = receipt.transactionIds as string;
+      const encryptedTxIds = deserializedReceipt.transactionIds as string;
       const encryptedBytes = Uint8Array.from(atob(encryptedTxIds), (c) => c.charCodeAt(0));
 
       const decryptedBytes = await wallet.signingEnclave.decryptWithWalletKey(
         encryptedBytes,
-        receipt.groupId
+        deserializedReceipt.groupId
       );
 
       const decryptedJson = new TextDecoder().decode(decryptedBytes);
@@ -812,20 +820,21 @@ export class KaspaSDK {
 
       // Decrypt metadata (fileName, fileSize, hash) if present
       decryptLogger.debug('Checking for encrypted metadata', {
-        hasEncryptedMetadata: !!receipt.encryptedMetadata,
-        currentFileName: receipt.fileName,
-        currentFileSize: receipt.fileSize,
+        hasEncryptedMetadata: !!deserializedReceipt.encryptedMetadata,
+        currentFileName: deserializedReceipt.fileName,
+        currentFileSize: deserializedReceipt.fileSize,
       });
 
-      if (receipt.encryptedMetadata) {
+      if (deserializedReceipt.encryptedMetadata) {
         decryptLogger.info('Decrypting receipt metadata');
         try {
-          const encryptedMetadataBytes = Uint8Array.from(atob(receipt.encryptedMetadata), (c) =>
-            c.charCodeAt(0)
+          const encryptedMetadataBytes = Uint8Array.from(
+            atob(deserializedReceipt.encryptedMetadata),
+            (c) => c.charCodeAt(0)
           );
           const decryptedMetadataBytes = await wallet.signingEnclave.decryptWithWalletKey(
             encryptedMetadataBytes,
-            receipt.groupId
+            deserializedReceipt.groupId
           );
           const decryptedMetadataJson = new TextDecoder().decode(decryptedMetadataBytes);
           const metadata = JSON.parse(decryptedMetadataJson) as {
@@ -841,7 +850,7 @@ export class KaspaSDK {
 
           // Return receipt with decrypted metadata
           return {
-            ...receipt,
+            ...deserializedReceipt,
             transactionIds,
             transactionIdsEncrypted: false,
             fileName: metadata.fileName,
@@ -856,8 +865,8 @@ export class KaspaSDK {
           // Continue with placeholder values, but log the full error for debugging
           decryptLogger.error('Metadata decryption error details', {
             error: (metadataError as Error).message,
-            groupId: receipt.groupId,
-            hasEncryptedMetadata: !!receipt.encryptedMetadata,
+            groupId: deserializedReceipt.groupId,
+            hasEncryptedMetadata: !!deserializedReceipt.encryptedMetadata,
           });
         }
       } else {
@@ -866,7 +875,7 @@ export class KaspaSDK {
 
       // Return with decrypted transaction IDs (metadata might still be placeholder)
       return {
-        ...receipt,
+        ...deserializedReceipt,
         transactionIds,
         transactionIdsEncrypted: false,
       };

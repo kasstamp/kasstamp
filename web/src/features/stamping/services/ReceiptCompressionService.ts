@@ -80,10 +80,11 @@ export class ReceiptCompressionService {
 
     // Decompress with pako
     const decompressed = pako.inflate(bytes, { to: 'string' });
-    const receipt = JSON.parse(decompressed) as StampingReceipt;
+    const receiptJson = JSON.parse(decompressed);
 
     pageLogger.info('📄 Receipt decompressed successfully');
-    return receipt;
+    // Return raw JSON - SDK will handle deserialization
+    return receiptJson as StampingReceipt;
   }
 
   /**

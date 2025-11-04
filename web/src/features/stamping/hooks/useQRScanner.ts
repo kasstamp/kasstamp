@@ -6,7 +6,7 @@
 
 import { useState, useCallback, useRef } from 'react';
 import { Html5Qrcode, Html5QrcodeSupportedFormats } from 'html5-qrcode';
-import type { StampingReceipt } from '@kasstamp/sdk';
+import type { RawReceiptJson } from '@kasstamp/sdk';
 import { pageLogger } from '@/core/utils/logger';
 import pako from 'pako';
 
@@ -17,7 +17,7 @@ export function useQRScanner() {
   const scannerRef = useRef<Html5Qrcode | null>(null);
 
   const startScanning = useCallback(
-    async (elementId: string, onSuccess: (receipt: StampingReceipt) => void): Promise<void> => {
+    async (elementId: string, onSuccess: (receipt: RawReceiptJson) => void): Promise<void> => {
       try {
         setError(null);
         setIsScanning(true);
@@ -143,6 +143,8 @@ export function useQRScanner() {
 
               if (isValidReceipt(parsed)) {
                 // Valid receipt found - stop scanner and open receipt
+                // After validation, we know it's a RawReceiptJson
+                const validatedReceipt = parsed as RawReceiptJson;
                 html5QrCode
                   .stop()
                   .then(() => {
@@ -150,7 +152,7 @@ export function useQRScanner() {
                     scannerRef.current = null;
                     setIsScanning(false);
                     setError(null); // Clear any previous errors
-                    onSuccess(parsed as StampingReceipt);
+                    onSuccess(validatedReceipt);
                   })
                   .catch((err) => {
                     const error = err as Error;
