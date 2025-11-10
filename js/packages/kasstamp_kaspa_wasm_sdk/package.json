@@ -33,7 +33,7 @@
   "devDependencies": {
     "tsup": "^8.0.0",
     "typescript": "^5.9.2",
-    "@typescript-eslint/eslint-plugin": "^8.44.0",
+    "@typescript-eslint/eslint-plugin": "^8.46.3",
     "@typescript-eslint/parser": "^8.44.0",
     "eslint": "^9.35.0"
   }
