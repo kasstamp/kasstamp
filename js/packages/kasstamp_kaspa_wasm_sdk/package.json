@@ -31,7 +31,7 @@
     "build:bundle": "tsup --dts src/index.ts --format esm --splitting false --clean --no-splitting --sourcemap"
   },
   "devDependencies": {
-    "tsup": "^8.0.0",
+    "tsup": "^8.5.1",
     "typescript": "^5.9.2",
     "@typescript-eslint/eslint-plugin": "^8.44.0",
     "@typescript-eslint/parser": "^8.44.0",
