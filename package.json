@@ -26,7 +26,7 @@
     "format:check": "npx prettier --check \"**/*.{ts,js,json,md,yaml,yml,html,svg}\" \"*.{ts,js,json,md,yaml,yml,html,svg}\" \"js/packages/kasstamp_kaspa_wasm_sdk/src/kaspa.d.ts\""
   },
   "devDependencies": {
-    "@commitlint/cli": "^20.1.0",
+    "@commitlint/cli": "^20.2.0",
     "@commitlint/config-conventional": "^20.0.0",
     "@prettier/plugin-xml": "^3.4.2",
     "prettier": "^3.6.2",
